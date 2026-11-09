@@ -633,7 +633,7 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 
 function defaults(n){
   const hw=n.info?.hardware||{}; const gpu=(hw.gpus||[]).length>0;
-  return {model:'',ctx_size:4096,gpu_layers:gpu?99:0,threads:Math.max(1,Math.floor((hw.cpu_count||4)/2)),parallel:1,batch_size:2048,ubatch_size:512,supports_images:true,mmproj:'',extra_args:''};
+  return {model:'',ctx_size:4096,gpu_layers:gpu?99:0,threads:Math.max(1,Math.floor((hw.cpu_count||4)/2)),parallel:1,batch_size:2048,ubatch_size:512,supports_images:true,mmproj:'',mmproj_offload:true,extra_args:''};
 }
 function render(){
   const root=$('#nodes');
@@ -668,6 +668,7 @@ function skeleton(n){
     </div>
     <label class="row" style="margin-top:8px" title="Enables automatic projector selection for this model. Image input is available only when the worker loads a vision projector."><input type="checkbox" data-f="supports_images"${s.supports_images!==false?' checked':''}> Multimodal model (enable image input)</label>
     <label style="margin-top:8px">Vision projector (mmproj)<select data-f="mmproj"><option value="">Auto (match by name)</option></select></label>
+    <label class="row small" style="margin-top:6px" title="Keep the vision projector in system memory instead of CUDA memory. Useful when loading the image projector runs out of VRAM."><input type="checkbox" data-f="mmproj_offload"${s.mmproj_offload!==false?' checked':''}> Offload vision projector to GPU</label>
     <label style="margin-top:8px">Extra llama-server args<input data-f="extra_args" placeholder="--flash-attn on --cache-type-k q8_0" value="${esc(s.extra_args)}"></label>
     <div class="row small" style="margin-top:6px"><span class="mut" data-k="mcnote"></span><span class="sp" style="flex:1"></span><a href="#" class="mut" onclick="resetModelCfg('${n.id}');return false">reset this model</a></div>
     </details>
@@ -729,7 +730,7 @@ function update(el,n){
 }
 
 // ---- one saved config per (node, model): survives reloads, and switching models swaps the whole form
-const MC_FIELDS=['ctx_size','gpu_layers','threads','parallel','batch_size','ubatch_size','supports_images','mmproj','extra_args'];
+const MC_FIELDS=['ctx_size','gpu_layers','threads','parallel','batch_size','ubatch_size','supports_images','mmproj','mmproj_offload','extra_args'];
 let MCFG=(()=>{try{return JSON.parse(localStorage.getItem('lc_mcfg')||'{}')||{}}catch(e){return {}}})();
 const mcKey=(id,model)=>id+'|'+model;
 function mcPersist(){try{localStorage.setItem('lc_mcfg',JSON.stringify(MCFG))}catch(e){}}
@@ -766,7 +767,7 @@ function imageInputSync(id){
 }
 function cfg(id){
   const s={...settingsCache[id]}; const n=x=>x===''||x==null?undefined:Number(x);
-  return {model:s.model,ctx_size:n(s.ctx_size),gpu_layers:n(s.gpu_layers),threads:n(s.threads),parallel:n(s.parallel),batch_size:n(s.batch_size),ubatch_size:n(s.ubatch_size),supports_images:s.supports_images!==false,mmproj:s.mmproj||undefined,extra_args:s.extra_args};
+  return {model:s.model,ctx_size:n(s.ctx_size),gpu_layers:n(s.gpu_layers),threads:n(s.threads),parallel:n(s.parallel),batch_size:n(s.batch_size),ubatch_size:n(s.ubatch_size),supports_images:s.supports_images!==false,mmproj:s.mmproj||undefined,mmproj_offload:s.mmproj_offload!==false,extra_args:s.extra_args};
 }
 async function startNode(id){try{const el=document.querySelector(`[data-id="${id}"] [data-f="model"]`);settingsCache[id].model=el.value;saveModelCfg(id);await api(`/api/nodes/${id}/start`,'POST',cfg(id));refresh()}catch(e){alert(e.message)}}
 async function stopNode(id){try{await api(`/api/nodes/${id}/stop`,'POST');refresh()}catch(e){alert(e.message)}}

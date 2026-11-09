@@ -2,6 +2,11 @@
 const fs=require('fs'),path=require('path');
 const src=fs.readFileSync(path.join(__dirname,'..','ui.html'),'utf8');
 const ok=(condition,message)=>{if(!condition)throw Error(message);console.log('ok  ',message)};
+const cfgStart=src.indexOf('function cfg(id){'),cfgEnd=src.indexOf('async function startNode(',cfgStart);
+const makeNodeCfg=new Function('settingsCache',src.slice(cfgStart,cfgEnd)+';return cfg');
+const multimodalCfg=makeNodeCfg({node:{model:'vision-model',supports_images:true,mmproj_offload:false}})('node');
+ok(multimodalCfg.mmproj_offload===false&&src.includes("'mmproj_offload'")&&src.includes('data-f="mmproj_offload"'),
+  'persists the per-model vision-projector GPU offload setting');
 const identityStart=src.indexOf('const OLD_OPEN='),identityEnd=src.indexOf('const TOOL_DEFAULTS=',identityStart);
 const prompts=new Function(src.slice(identityStart,identityEnd)+';return {DEFAULT_SYS,NEW_OPEN}')();
 const defaultPromptStart=src.indexOf('function agentDefaultPrompt('),defaultPromptEnd=src.indexOf('function migrateAgentIdentityPrompts(',defaultPromptStart);

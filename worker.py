@@ -719,13 +719,18 @@ class Worker:
         extra = (cfg.get("extra_args") or "").strip()
         mm_used = ""
         want = (cfg.get("mmproj") or "").strip()
-        if cfg.get("supports_images", True) and not re.search(r"(^|\s)(--mmproj|-mm|--no-mmproj|-hf|--hf-repo)(\s|=|$)", extra) and want.lower() != "none":
+        extra_mmproj = re.search(r"(^|\s)(--mmproj|-mm|--no-mmproj|-hf|--hf-repo)(\s|=|$)", extra)
+        if cfg.get("supports_images", True) and not extra_mmproj and want.lower() != "none":
             mm_name = want if want and want.lower() != "auto" else self.pick_mmproj(cfg["model"])
             if mm_name:
                 cmd += ["--mmproj", self.resolve_model(mm_name)]
                 mm_used = mm_name
             elif want:
                 raise ValueError("no vision projector (mmproj) found for this model")
+        if (cfg.get("supports_images", True) and (mm_used or extra_mmproj)
+                and cfg.get("mmproj_offload", True) is False
+                and not re.search(r"(^|\s)--no-mmproj-offload(\s|$)", extra)):
+            cmd += ["--no-mmproj-offload"]
         if "--jinja" not in extra and "--no-jinja" not in extra:
             cmd += ["--jinja"]   # model's own chat template; required for tool calling on older llama.cpp
         if extra:
