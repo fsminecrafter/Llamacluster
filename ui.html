@@ -52,6 +52,28 @@ dialog::backdrop{background:#000a}
 #chat.full #cLog{width:min(1100px,100%);align-self:center}#chat.full .chat-hd,#chat.full .chips,#chat.full .copt,#chat.full #cToolInfo{width:min(1100px,100%);align-self:center}
 body.phone #chatGrip,body.phone #cFull{display:none}
 #cLog{flex:1;overflow:auto;display:flex;flex-direction:column;gap:8px;min-height:0}
+#cAgents{max-height:28vh;overflow:auto;display:flex;flex-direction:column;gap:6px;flex:none}
+#cAgents[hidden]{display:none}
+.agent-card{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:7px 9px;white-space:normal}
+.agent-head{display:flex;gap:7px;align-items:center;font-size:12px}
+.agent-head .agent-meta{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--mut)}
+.agent-head button{padding:2px 6px;min-height:0;font-size:11px}
+.agent-ring{width:24px;height:24px;flex:none;line-height:0}
+.agent-ring circle{fill:none;stroke-width:3}
+.agent-ring .tr{stroke:var(--line)}
+.agent-ring .arc{stroke:var(--acc)}
+.agent-ring.warn .arc{stroke:#fb923c}.agent-ring.crit .arc{stroke:#f87171}
+.agent-detail{margin-top:5px}
+.agent-detail summary{font-size:11px;color:var(--mut);cursor:pointer}
+.agent-history{max-height:180px;overflow:auto;display:flex;flex-direction:column;gap:4px;margin-top:5px}
+.agent-line{padding:4px 6px;border-radius:6px;background:#0d1016;font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere}
+.agent-line b{color:var(--acc);margin-right:5px}
+.agent-line.tool{color:var(--mut)}
+.agent-detail label{margin-top:5px;font-size:11px;color:var(--mut)}
+.agent-detail textarea{width:100%;min-height:54px;font-size:12px}
+.agent-send{display:flex;gap:5px;margin-top:5px}
+.agent-send input{min-width:0;flex:1;font-size:12px}
+.agent-send button{min-height:0;padding:3px 8px;font-size:11px}
 .msg{padding:8px 10px;border-radius:10px;max-width:94%;white-space:pre-wrap;word-break:break-word}
 .msg.user{align-self:flex-end;background:#243352;border:1px solid #2f4470}
 .msg.assistant{align-self:flex-start;background:var(--panel2);border:1px solid var(--line)}
@@ -134,6 +156,8 @@ a.tc::after{content:"↗";margin-left:auto;color:var(--mut)}
 .ask-q{font-weight:600;overflow-wrap:anywhere}.ask-opts{display:flex;flex-wrap:wrap;gap:6px}.ask-opts button{text-align:left;white-space:normal}#cAsk .row{flex-wrap:nowrap}#cAsk .row input{flex:1;min-width:0}
 #cTasks{border:1px solid var(--line);background:var(--panel2);border-radius:10px;padding:4px 10px;white-space:normal;flex:0 0 auto;max-height:30vh;overflow:auto}#cTasks[hidden]{display:none}
 #cTasks summary{cursor:pointer;font-size:12px;color:var(--mut)}
+#cSchedules{border:1px solid var(--line);background:var(--panel2);border-radius:10px;padding:4px 10px;white-space:normal;flex:0 0 auto;max-height:30vh;overflow:auto}#cSchedules[hidden]{display:none}
+#cSchedules summary{cursor:pointer;font-size:12px;color:var(--mut)}.schedule-item{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-top:1px solid var(--line);font-size:12px}.schedule-item .schedule-body{flex:1;min-width:0;overflow-wrap:anywhere}.schedule-result{white-space:pre-wrap;margin:4px 0;color:var(--tx)}
 .tk{display:flex;gap:6px;align-items:flex-start;padding:2px 0;font-size:13px}.tk .tt{flex:1;min-width:0;overflow-wrap:anywhere}
 .tk .ck,.tk .x{background:none;border:none;padding:0 3px;cursor:pointer;color:var(--tx);min-width:18px}.tk .x{color:var(--mut)}.tk.doing .ck{color:var(--warn)}.tk.done .ck{color:var(--ok)}.tk.done .tt{text-decoration:line-through;color:var(--mut)}
 .tk-foot{display:flex;gap:6px;margin-top:4px}
@@ -250,7 +274,7 @@ body:not(.phone) .copt[open]{padding-bottom:10px}
 #cSend{min-width:64px}
 #cToolInfo{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .btwbox{border-top:1px solid var(--line);padding:6px 12px;max-height:180px;overflow:auto;background:var(--panel)}
-.btwitem{padding:5px 0;border-bottom:1px solid var(--line)}.btwitem:last-child{border-bottom:0}
+.btwitem{padding:5px 0;border-bottom:1px solid var(--line)}.btwitem:last-child{border-bottom:0}.btwhead{display:flex;align-items:center;gap:8px}.btwhead b{flex:1;min-width:0;overflow-wrap:anywhere}.btwclose{background:none;border:0;color:var(--mut);cursor:pointer;padding:0 3px;font-size:15px}.btwclose:hover{color:var(--tx)}
 .msg .mt a{color:var(--mut);text-decoration:none;margin-left:6px;cursor:pointer}.msg .mt a:hover{color:var(--acc)}
 .msg .mt .cp{opacity:0;transition:opacity .15s}.msg:hover .mt .cp,.msg .mt .cp:focus{opacity:1}@media(hover:none){.msg .mt .cp{opacity:1}}
 .sugg{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:12px}.sugg button{border-radius:99px;font-size:12px;padding:5px 12px;background:var(--panel2);color:var(--tx)}
@@ -305,6 +329,16 @@ body:not(.phone) .copt[open]{padding-bottom:10px}
     <button onclick="dAdd.close()">Cancel</button><button class="pri" onclick="addNode()">Add</button>
   </div>
 </dialog>
+<dialog id="dWorkerSetup">
+  <h2 style="margin-top:0">Install worker autostart</h2>
+  <p class="mut small">Installs and starts a systemd user service on verified Linux worker nodes. Use one shared worker token; successful installs update the controller's saved node tokens. This does not install or update the controller itself.</p>
+  <label>Worker token<input id="workerSetupToken" type="password" autocomplete="new-password" placeholder="12–256 characters"></label>
+  <label style="margin-top:8px">Which node is the controller?<select id="workerControllerNode"></select></label>
+  <label class="row small" style="margin-top:8px"><input id="workerControllerIsWorker" type="checkbox"> The controller computer is also a worker (include the selected node)</label>
+  <div class="mut small">If the controller is not listed as a node, leave it set to “Not in this node list”. When the controller is a configured node but not a worker, leave the checkbox off so it is excluded.</div>
+  <div class="err" id="workerSetupError"></div>
+  <div class="row" style="margin-top:14px;justify-content:flex-end"><button onclick="dWorkerSetup.close()">Cancel</button><button class="pri" onclick="installWorkerServices()">Install on Linux nodes</button></div>
+</dialog>
 
 <dialog id="dInstall">
   <h2 style="margin-top:0">Install model</h2>
@@ -331,6 +365,15 @@ body:not(.phone) .copt[open]{padding-bottom:10px}
   <div class="row small" style="margin-top:6px"><a href="#" onclick="document.querySelectorAll('#bList input').forEach(i=>i.checked=true);return false">all</a><a href="#" onclick="document.querySelectorAll('#bList input').forEach(i=>i.checked=false);return false">none</a><a href="#" onclick="document.querySelectorAll('#bList input').forEach(i=>i.checked=!i.dataset.done);return false">not yet measured</a></div>
   <div class="err" id="bErr"></div>
   <div class="row" style="margin-top:12px;justify-content:flex-end"><button onclick="dBench.close()">Close</button><button class="pri" onclick="doBench()">Start benchmark</button></div>
+</dialog>
+<dialog id="dMove">
+  <h2 style="margin-top:0">Move models</h2>
+  <p class="mut small" id="mvSummary"></p>
+  <label>Destination disk<select id="mvStorage"></select></label>
+  <div class="row small" style="margin-top:8px"><span id="mvPathPreview" class="mut"></span><span class="sp"></span><button class="small" id="mvAdvanced" onclick="toggleMoveAdvanced()">Advanced path…</button></div>
+  <label id="mvCustomWrap" hidden style="margin-top:8px">Full destination directory<input id="mvCustom" placeholder="/path/to/llamacluster-models"></label>
+  <div class="err" id="mvErr"></div>
+  <div class="row" style="margin-top:12px;justify-content:flex-end"><button onclick="dMove.close()">Cancel</button><button class="pri" id="mvGo" onclick="doMoveModels()">Move Models</button></div>
 </dialog>
 <dialog id="dSend">
   <h2 style="margin-top:0">Send model to nodes</h2>
@@ -402,10 +445,12 @@ body:not(.phone) .copt[open]{padding-bottom:10px}
     </div>
   </details>
   <div id="cLog"></div>
+  <div id="cAgents" hidden></div>
   <div id="cBtw" class="btwbox" hidden></div>
   <div id="cCtxMenu" hidden></div>
   <div id="cAsk" hidden></div>
   <div id="cTasks" hidden></div>
+  <div id="cSchedules" hidden></div>
   <div class="chips">
     <select id="cMode" class="small" title="Dev: normal. Ask: questions about the workspace, read-only. Plan: research + propose a plan you accept or decline. Orchestra: split the job across your nodes. Leader: the strongest node plans tasks (parallel, with dependencies) and gives hard ones to itself and easy ones to smaller models. Software: works on a program by itself for a set time - build, test, troubleshoot, improve."><option value="dev">🛠 Dev</option><option value="ask">❓ Ask</option><option value="plan">🧭 Plan</option><option value="orchestra">🎼 Orchestra</option><option value="leader">👑 Leader</option><option value="software">💻 Software</option></select>
     <select id="cLeader" class="small" hidden title="Leader mode: which node plans the job and writes the final answer. Auto = the node with the strongest model. Hard tasks still go to the strongest model."></select>
@@ -415,8 +460,9 @@ body:not(.phone) .copt[open]{padding-bottom:10px}
   </div>
   <div id="cSlash" hidden></div>
   <div class="cimgs" id="cImgs" hidden></div>
+  <div id="cQueue" class="mut small" hidden></div>
   <div class="composer">
-    <button class="small" id="cAttach" onclick="$('#cFile').click()" title="Attach an image">📎</button><input type="file" id="cFile" accept="image/*" multiple hidden>
+    <button class="small" id="cAttach" onclick="$('#cFile').click()" title="Attach an image">📎</button><input type="file" id="cFile" accept="image/*" multiple style="position:fixed;left:-10000px;width:1px;height:1px;opacity:0">
     <textarea id="cIn" rows="1" placeholder="Message…"></textarea>
     <button id="cCtx" class="ctx" onclick="ctxMenu()" title="Context window"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><circle class="tr" cx="12" cy="12" r="9" fill="none" stroke-width="2.6"/><circle id="cCtxArc" class="arc" cx="12" cy="12" r="9" fill="none" stroke-width="2.6" stroke-linecap="round" transform="rotate(-90 12 12)" stroke-dasharray="0 56.55" style="opacity:0"/></svg></button>
     <button class="small" id="cRegen" onclick="chatRegen()" title="Re-run the last reply">↻</button>
@@ -450,6 +496,19 @@ body:not(.phone) .copt[open]{padding-bottom:10px}
       <label>Compact behavior<select id="cCompactMode"><option value="ai">AI-driven summary</option><option value="script">Script snapshot</option></select></label>
     </div>
     <div class="mut small" style="margin-top:6px">Tool output longer than this is cut off (≈4 characters per token) before it is sent back to the model, so big file reads or web pages can't overflow the context window. Software mode and Orchestra workers use at most 1000. Default 3000.</div>
+    <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+    <div class="small"><b>Worker services</b></div>
+    <div class="mut small" style="margin:4px 0 8px">Manage Linux workers on this cluster. Autostart uses a systemd user service; non-Linux nodes and Linux hosts without an available systemd user manager are skipped or report an error.</div>
+    <div class="row">
+      <button onclick="openWorkerSetup()">Install autostart service on all nodes</button>
+      <button class="dng" onclick="runWorkerAction('uninstall')">Uninstall autostart service on all nodes</button>
+    </div>
+    <div class="row" style="margin-top:6px">
+      <button onclick="runWorkerAction('restart')">Restart all workers</button>
+      <button onclick="runWorkerAction('update')">Update LlamaCluster on all</button>
+    </div>
+    <div class="mut small" style="margin-top:6px">Update runs <code>git pull --ff-only origin main</code> on each worker's clean Linux checkout, then restarts its worker process. Local changes are never overwritten.</div>
+    <div class="err" id="workerOpsStatus" style="white-space:pre-wrap;margin-top:8px"></div>
   </section>
   <section data-pane="prompt" hidden>
     <label>System prompt<textarea id="cSys" rows="14"></textarea></label>
@@ -561,7 +620,7 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 
 function defaults(n){
   const hw=n.info?.hardware||{}; const gpu=(hw.gpus||[]).length>0;
-  return {model:'',ctx_size:4096,gpu_layers:gpu?99:0,threads:Math.max(1,Math.floor((hw.cpu_count||4)/2)),parallel:1,batch_size:2048,ubatch_size:512,mmproj:'',extra_args:''};
+  return {model:'',ctx_size:4096,gpu_layers:gpu?99:0,threads:Math.max(1,Math.floor((hw.cpu_count||4)/2)),parallel:1,batch_size:2048,ubatch_size:512,supports_images:true,mmproj:'',extra_args:''};
 }
 function render(){
   const root=$('#nodes');
@@ -594,7 +653,8 @@ function skeleton(n){
       <label>Parallel slots<input data-f="parallel" type="number" value="${s.parallel}"></label>
       <label>Batch / ubatch<span class="row"><input data-f="batch_size" type="number" value="${s.batch_size}" style="width:50%"><input data-f="ubatch_size" type="number" value="${s.ubatch_size}" style="width:50%"></span></label>
     </div>
-    <label style="margin-top:8px">Vision projector (mmproj) — lets a multimodal model read images<select data-f="mmproj"><option value="">Auto (match by name)</option></select></label>
+    <label class="row" style="margin-top:8px" title="Enables automatic projector selection for this model. Image input is available only when the worker loads a vision projector."><input type="checkbox" data-f="supports_images"${s.supports_images!==false?' checked':''}> Multimodal model (enable image input)</label>
+    <label style="margin-top:8px">Vision projector (mmproj)<select data-f="mmproj"><option value="">Auto (match by name)</option></select></label>
     <label style="margin-top:8px">Extra llama-server args<input data-f="extra_args" placeholder="--flash-attn on --cache-type-k q8_0" value="${esc(s.extra_args)}"></label>
     <div class="row small" style="margin-top:6px"><span class="mut" data-k="mcnote"></span><span class="sp" style="flex:1"></span><a href="#" class="mut" onclick="resetModelCfg('${n.id}');return false">reset this model</a></div>
     </details>
@@ -603,6 +663,7 @@ function skeleton(n){
       <button data-k="max" onclick="maxNode('${n.id}')" title="Fill in the settings that use as much of this node as possible for the selected model">⚡ Maximise</button>
       <button data-k="stop" onclick="stopNode('${n.id}')">Stop</button>
       <button onclick="openInstall('${n.id}')">Install model…</button>
+      <button onclick="openMoveModels('${n.id}')">Move Models</button>
       <button data-k="benchbtn" onclick="openBench('${n.id}')" title="Measure tokens/s for the installed models on this node">⏱ Benchmark</button>
       <button onclick="toggleLogs('${n.id}')">Logs</button>
     </div>
@@ -633,6 +694,7 @@ function update(el,n){
   // vision projector select
   const msel=el.querySelector('[data-f="mmproj"]'),mms=(n.info.mmprojs||[]).map(x=>x.name),msig=mms.join('|');
   if(msel.dataset.sig!==msig){msel.innerHTML=[['','Auto (match by name)'],['none','None (text only)'],...mms.map(x=>[x,x])].map(([v,l])=>`<option value="${esc(v)}">${esc(l)}</option>`).join('');msel.dataset.sig=msig;msel.value=settingsCache[n.id].mmproj||''}
+  msel.disabled=settingsCache[n.id].supports_images===false;
   // model select: refresh options but keep selection
   const sel=el.querySelector('[data-f="model"]'); const names=n.info.models.map(m=>m.name);
   const want=settingsCache[n.id].model||sel.value||n.info.server.config?.model||names[0]||'';
@@ -654,7 +716,7 @@ function update(el,n){
 }
 
 // ---- one saved config per (node, model): survives reloads, and switching models swaps the whole form
-const MC_FIELDS=['ctx_size','gpu_layers','threads','parallel','batch_size','ubatch_size','mmproj','extra_args'];
+const MC_FIELDS=['ctx_size','gpu_layers','threads','parallel','batch_size','ubatch_size','supports_images','mmproj','extra_args'];
 let MCFG=(()=>{try{return JSON.parse(localStorage.getItem('lc_mcfg')||'{}')||{}}catch(e){return {}}})();
 const mcKey=(id,model)=>id+'|'+model;
 function mcPersist(){try{localStorage.setItem('lc_mcfg',JSON.stringify(MCFG))}catch(e){}}
@@ -672,6 +734,7 @@ function loadModelCfg(id,model){   // fill the form from this model's saved conf
   const run=n?.info?.server?.config;
   const cfg=MCFG[mcKey(id,model)]||(run&&run.model===model?run:null)||(n?defaults(n):{});   // saved > what's running now > node defaults
   const o={};MC_FIELDS.forEach(k=>{if(cfg[k]!==undefined)o[k]=cfg[k]});
+  if(o.supports_images===undefined)o.supports_images=true;
   applyCfgToForm(id,o,true);mcNote(id);
 }
 function resetModelCfg(id){
@@ -680,12 +743,17 @@ function resetModelCfg(id){
 // remember settings as the user edits (so polling re-renders never reset them)
 document.addEventListener('input',e=>{
   const f=e.target.dataset?.f; if(!f)return; const id=e.target.closest('.card')?.dataset.id; if(!id)return;
-  settingsCache[id][f]=e.target.value;
+  settingsCache[id][f]=e.target.type==='checkbox'?e.target.checked:e.target.value;
+  if(f==='supports_images')imageInputSync(id);
   if(f==='model')loadModelCfg(id,e.target.value);else saveModelCfg(id);
 });
+function imageInputSync(id){
+  const el=cardEl(id),enabled=el?.querySelector('[data-f="supports_images"]')?.checked!==false;
+  const mmproj=el?.querySelector('[data-f="mmproj"]');if(mmproj)mmproj.disabled=!enabled;
+}
 function cfg(id){
   const s={...settingsCache[id]}; const n=x=>x===''||x==null?undefined:Number(x);
-  return {model:s.model,ctx_size:n(s.ctx_size),gpu_layers:n(s.gpu_layers),threads:n(s.threads),parallel:n(s.parallel),batch_size:n(s.batch_size),ubatch_size:n(s.ubatch_size),mmproj:s.mmproj||undefined,extra_args:s.extra_args};
+  return {model:s.model,ctx_size:n(s.ctx_size),gpu_layers:n(s.gpu_layers),threads:n(s.threads),parallel:n(s.parallel),batch_size:n(s.batch_size),ubatch_size:n(s.ubatch_size),supports_images:s.supports_images!==false,mmproj:s.mmproj||undefined,extra_args:s.extra_args};
 }
 async function startNode(id){try{const el=document.querySelector(`[data-id="${id}"] [data-f="model"]`);settingsCache[id].model=el.value;saveModelCfg(id);await api(`/api/nodes/${id}/start`,'POST',cfg(id));refresh()}catch(e){alert(e.message)}}
 async function stopNode(id){try{await api(`/api/nodes/${id}/stop`,'POST');refresh()}catch(e){alert(e.message)}}
@@ -737,6 +805,47 @@ async function doInstall(){
   const errs=res.map((r,i)=>r.status==='rejected'?(NODES.find(n=>n.id===ids[i])?.name||ids[i])+': '+r.reason.message:null).filter(Boolean);
   if(errs.length)$('#iErr').textContent=errs.join(' | ');else dInstall.close();
   refresh();
+}
+let moveTarget=null,moveInfo=null,moveAdvanced=false;
+const storageBytes=n=>{if(!n)return'0 B';const u=['B','KB','MB','GB','TB'];let i=0;while(n>=1024&&i<u.length-1){n/=1024;i++}return`${n.toFixed(i?1:0)} ${u[i]}`};
+function movePathPreview(){
+  const root=$('#mvStorage').value,folder=moveInfo?.folder_name||'llamacluster-models';
+  const target=root?`${root.replace(/\/+$/,'')}/${folder}`:'';
+  $('#mvPathPreview').textContent=moveAdvanced?'Advanced destination: full path below':target?`Destination: ${target}`:'No writable storage destination found.';
+  if(moveAdvanced&&target&&!$('#mvCustom').value)$('#mvCustom').value=target;
+}
+async function openMoveModels(id){
+  const n=NODES.find(x=>x.id===id);if(!n)return;
+  moveTarget=id;moveInfo=null;moveAdvanced=false;$('#mvErr').textContent='Loading storage…';$('#mvSummary').textContent='';$('#mvGo').disabled=true;$('#mvCustomWrap').hidden=true;
+  $('#mvAdvanced').textContent='Advanced path…';$('#mvCustom').value='';
+  dMove.showModal();
+  try{
+    moveInfo=await api(`/api/nodes/${id}/models/storage`);
+    const storages=(moveInfo.storages||[]).filter(s=>`${s.path.replace(/\/+$/,'')}/${moveInfo.folder_name}`!==moveInfo.models_dir);
+    $('#mvStorage').innerHTML=storages.map(s=>`<option value="${esc(s.path)}"${s.target_exists||s.free_bytes<moveInfo.required_bytes?' disabled':''}>${esc(s.name)} — ${storageBytes(s.free_bytes)} free${s.target_exists?' (models folder already exists)':s.free_bytes<moveInfo.required_bytes?' (not enough space)':''}</option>`).join('');
+    $('#mvStorage').onchange=movePathPreview;
+    $('#mvSummary').textContent=`Move the complete models folder from ${moveInfo.models_dir} (${storageBytes(moveInfo.required_bytes)}). The worker and downloads must be idle.`;
+    $('#mvErr').textContent=moveInfo.busy?'Stop the model server and wait for downloads or benchmarks to finish before moving models.':storages.length?'':'No other storage locations were found.';
+    $('#mvGo').disabled=!!moveInfo.busy||!storages.some(s=>!s.target_exists&&s.free_bytes>=moveInfo.required_bytes);
+    movePathPreview();
+  }catch(e){$('#mvErr').textContent=e.message}
+}
+function toggleMoveAdvanced(){
+  moveAdvanced=!moveAdvanced;$('#mvCustomWrap').hidden=!moveAdvanced;
+  $('#mvAdvanced').textContent=moveAdvanced?'Choose a disk…':'Advanced path…';movePathPreview();
+  $('#mvGo').disabled=!!moveInfo?.busy||(!moveAdvanced&&!moveInfo?.storages?.some(s=>!s.target_exists&&s.free_bytes>=moveInfo.required_bytes&&
+    `${s.path.replace(/\/+$/,'')}/${moveInfo.folder_name}`!==moveInfo.models_dir));
+}
+async function doMoveModels(){
+  if(!moveTarget)return;
+  const destination=moveAdvanced?$('#mvCustom').value.trim():`${$('#mvStorage').value.replace(/\/+$/,'')}/${moveInfo.folder_name}`;
+  if(!destination){$('#mvErr').textContent='Choose a storage location or enter a full destination path.';return}
+  $('#mvGo').disabled=true;$('#mvErr').textContent='Moving and verifying models… this may take a while.';
+  try{
+    const result=await api(`/api/nodes/${moveTarget}/models/move`,'POST',{destination});
+    dMove.close();refresh();
+    if(result.warning)alert(result.warning);
+  }catch(e){$('#mvErr').textContent=e.message;$('#mvGo').disabled=false}
 }
 // ---- benchmark installed models on a node (tokens/s shown next to the size in Installed models)
 let benchTarget=null;
@@ -915,13 +1024,21 @@ const TOOL_DEFAULTS={search:true,fetch:true,read:true,write:true,exec:true};
 let CH=(()=>{try{return JSON.parse(localStorage.getItem('lc_chat')||'null')}catch(e){return null}})()||{};
 CH={msgs:[],btw:[],temp:0.7,max:2048,effort:'',model:'',route:'',steps:10,toolTok:3000,mode:'dev',leader:'',tasks:[],taskSeq:0,maxSub:4,perm:'semi',compactMode:'ai',...CH};
 if(!Array.isArray(CH.btw))CH.btw=[];
+if(!Array.isArray(CH.queue))CH.queue=[];
+if(!Array.isArray(CH.agents))CH.agents=[];
+if(!Array.isArray(CH.agentNotes))CH.agentNotes=[];
+if(typeof CH.agentInterrupt!=='boolean')CH.agentInterrupt=false;
+CH.agents=CH.agents.filter(a=>a&&typeof a.id==='string'&&typeof a.name==='string'&&typeof a.model==='string'&&Array.isArray(a.messages));
+CH.agents.forEach(a=>{if(a.status==='working'||a.status==='starting')a.status='waiting';if(!Array.isArray(a.inbox))a.inbox=[];});
 if(!['manual','semi','uncontrolled'].includes(CH.perm))CH.perm='semi';
 if(!['ai','script'].includes(CH.compactMode))CH.compactMode='ai';
 CH.tools={...TOOL_DEFAULTS,...(CH.tools||{})};
+if(!CH.agentToolsSetup){CH.tools.spawn=true;CH.agentToolsSetup=true}
 if(CH.sys2===undefined)CH.sys2=DEFAULT_SYS;
 else if(CH.sys2.startsWith(OLD_OPEN))CH.sys2=NEW_OPEN+CH.sys2.slice(OLD_OPEN.length);   // saved copy of the old default: keep the user's edits, add the identity
 let chatAbort=null,TOOLINFO=null,wsOpenPath=null,wsIsNew=false;
-const saveChat=()=>{try{CH.msgs=CH.msgs.slice(-300);localStorage.setItem('lc_chat',JSON.stringify(CH))}catch(e){}ctxSoon()};
+const AGENT_NAMES=['Hydrogen','Indium','Sulfur'],agentRuns=new Map();
+const saveChat=()=>{try{CH.msgs=CH.msgs.slice(-300);CH.agents.forEach(a=>{a.messages=a.messages.slice(-120)});localStorage.setItem('lc_chat',JSON.stringify(CH))}catch(e){}ctxSoon()};
 async function loadTools(){
   try{TOOLINFO=await api('/api/tools')}catch(e){TOOLINFO=null}
   (TOOLINFO?.tools||[]).filter(t=>t.optional).forEach(t=>{if(CH.tools[t.group]===undefined)CH.tools[t.group]=!!t.default_on});   // first time we see an optional tool: its default
@@ -930,7 +1047,12 @@ async function loadTools(){
 function renderOptTools(){
   const box=$('#optTools');if(!box)return;
   const opt=[...new Map((TOOLINFO?.tools||[]).filter(t=>t.optional).map(t=>[t.group,t])).values()];
-  box.innerHTML=opt.length?opt.map(t=>`<label><input type="checkbox" data-tool="${esc(t.group)}"${CH.tools[t.group]?' checked':''}> <span>${esc(t.title||t.group)} <span class="mut small">— ${esc(t.blurb||'')}</span></span></label>`).join(''):'<div class="mut small">none available — update controller.py</div>';
+  let section='';
+  box.innerHTML=opt.length?opt.map(t=>{
+    const heading=t.section&&t.section!==section?`<div class="small" style="grid-column:1/-1;margin-top:8px"><b>${esc(t.section)}</b></div>`:'';
+    section=t.section||'';
+    return heading+`<label><input type="checkbox" data-tool="${esc(t.group)}"${CH.tools[t.group]?' checked':''}> <span>${esc(t.title||t.group)} <span class="mut small">— ${esc(t.blurb||'')}</span></span></label>`;
+  }).join(''):'<div class="mut small">none available — update controller.py</div>';
   box.querySelectorAll('[data-tool]').forEach(c=>c.onchange=()=>{CH.tools[c.dataset.tool]=c.checked;saveChat();toolInfo()});
 }
 const isOptGroup=g=>!!(TOOLINFO?.tools||[]).find(t=>t.group===g&&t.optional);
@@ -941,30 +1063,61 @@ function spawnSlots(){
     return Array(Math.max(0,slots-used)).fill(0).map(()=>({node:n.name,model:cfg.model}));
   });
 }
+function agentSpawnSlots(){
+  const pending=Object.create(null),running=Object.create(null);
+  CH.agents.forEach(a=>{if(a.node){if(agentRuns.has(a.id))running[a.node]=(running[a.node]||0)+1;else if(['starting','working','interrupted','queued'].includes(a.status))pending[a.node]=(pending[a.node]||0)+1}});
+  return NODES.filter(n=>n.info?.server?.state==='ready'&&n.info.server.config?.model).flatMap(n=>{
+    const s=n.info.server,cfg=s.config||{},slots=Math.max(1,+cfg.parallel||1),observed=Math.max(+n.gateway_inflight||0,+s.inflight||0);
+    const used=Math.max(observed,running[n.name]||0)+(pending[n.name]||0);
+    return Array(Math.max(0,slots-used)).fill(0).map(()=>({node:n.name,model:cfg.model}));
+  });
+}
 // which tool groups each mode may use (null = whatever is ticked): plan researches read-only, ask only looks at the workspace
-const MODE_GROUPS={plan:['search','fetch','read'],ask:['read']};
+const MODE_GROUPS={plan:['search','fetch','read'],ask:['read','view_image']};
 const MODE_DENY={orchestra:['question'],leader:['question']};   // parallel workers run unattended: they cannot wait for an answer (Ask mode already only gets the read tools)
 const groupOk=g=>!!CH.tools[g]&&!(MODE_DENY[CH.mode]||[]).includes(g)&&(!MODE_GROUPS[CH.mode]||MODE_GROUPS[CH.mode].includes(g)||(CH.mode==='plan'&&isOptGroup(g)));   // optional tools only compute, so planning may use them
-function activeTools(){
+function activeTools(model=CH.model,route=CH.route,agentId=null){
   if(!TOOLINFO)return [];
   return TOOLINFO.tools.filter(t=>groupOk(t.group)).map(t=>{
     const f=structuredClone(t.function);
     if(f.name==='spawn'){
-      const models=[...new Set(spawnSlots().map(x=>x.model))];
+      const live=CH.agents.length<AGENT_NAMES.length&&AGENT_NAMES.some(n=>!CH.agents.some(a=>a.name===n))&&agentSpawnSlots().length>0;
+      const slots=spawnSlots(),models=[...new Set([...slots,...(live?agentSpawnSlots():[])].map(x=>x.model))];
       if(!models.length)return null;
       f.parameters.properties.model={type:'string',enum:models,description:'Select one of these ready models; nodes without a free slot will not be used.'};
+      f.parameters.properties.mode.enum=[...(live?['agent']:[]),...(slots.length?['parallel','debate']:[])];
+      if(!live)f.description+=' No free named-agent slot is currently available; parallel/debate mode may still be used.';
     }
+    if(['tell','interrupt','status','despawn'].includes(f.name)){
+      const targets=CH.agents.filter(a=>f.name==='status'||a.id!==agentId).map(a=>a.name);
+      if(agentId&&(f.name==='tell'||f.name==='interrupt'||f.name==='status'))targets.unshift('Calcium');
+      if(!targets.length)return null;
+      f.parameters.properties.target={type:'string',enum:targets,description:'Choose a currently active agent.'};
+      if(f.name==='status')f.parameters.required=[];
+    }
+    if(f.name==='agent_done'&&!agentId)return null;
+    if(agentId&&f.name==='question')return null;
+    if(agentId&&f.name==='despawn')return null;
+    if(agentId&&f.name==='interrupt'&&!CH.agents.some(a=>a.id!==agentId))return null;
+    if(['spawn','tell','interrupt','status','despawn','agent_done'].includes(f.name)&&!CH.tools[f.name])return null;
+    if(['spawn','tell','interrupt','status','despawn','agent_done'].includes(f.name)&&['ask','orchestra','leader'].includes(CH.mode))return null;
     if(f.name==='playwright'){
       if(!playwrightReady())return null;
       delete f.parameters.properties.path;
       f.parameters.required=f.parameters.required.filter(x=>x!=='path');
       f.description+=' Currently opened file: '+wsOpenPath+'.';
     }
+    if(f.name==='view_image'){
+      if(!capsFor(model,route).vision)return null;
+      const images=chatImageRefs();
+      f.parameters.properties.attachment.description='1-based chat image number. Available: '+(images.length?images.map((x,i)=>`${i+1} "${x.name}"`).join(', '):'none')+'. Use path instead for a workspace image.';
+      if(images.length)f.parameters.properties.attachment.enum=images.map((_,i)=>i+1);
+    }
     return {type:'function',function:f};
   }).filter(Boolean);
 }
 function toolInfo(){
-  const on=Object.entries({search:'search',fetch:'fetch',read:'files(read)',write:'files(write)',exec:'shell',calc:'calc',units:'units',time:'time',question:'ask you',tasks:'tasks',spawn:'spawn models',runweb:'run web',playwright:'Playwright'}).filter(([k])=>groupOk(k)&&(k!=='exec'||TOOLINFO?.exec!==false)&&(k!=='playwright'||playwrightReady())&&(!['calc','units','time','question','tasks','spawn','runweb','playwright'].includes(k)||(TOOLINFO?.tools||[]).some(t=>t.group===k))).map(([,v])=>v);
+  const on=Object.entries({search:'search',fetch:'fetch',read:'files(read)',write:'files(write)',exec:'shell',calc:'calc',units:'units',time:'time',question:'ask you',tasks:'tasks',spawn:'spawn models',tell:'tell agents',interrupt:'interrupt agents',status:'agent status',despawn:'despawn agents',runweb:'run web',playwright:'Playwright',view_image:'view images'}).filter(([k])=>groupOk(k)&&(k!=='exec'||TOOLINFO?.exec!==false)&&(k!=='playwright'||playwrightReady())&&(k!=='view_image'||capsNow().vision)&&(!['calc','units','time','question','tasks','spawn','tell','interrupt','status','despawn','runweb','playwright','view_image'].includes(k)||(TOOLINFO?.tools||[]).some(t=>t.group===k))).map(([,v])=>v);
   $('#cToolInfo').textContent=(CH.mode!=='dev'?MODES[CH.mode]+' · ':'')+(!TOOLINFO?'tools unavailable (update controller.py)':on.length?'tools: '+on.join(' · ')+' · '+({manual:'✋',semi:'🛡',uncontrolled:'⚡'}[effPerm()]||''):'tools off');$('#cToolInfo').title=$('#cToolInfo').textContent;ctxSoon();
 }
 
@@ -997,7 +1150,7 @@ try{$('.copt').open=localStorage.getItem('lc_copt')==='1'}catch(e){}
 $('.copt').addEventListener('toggle',e=>{try{localStorage.setItem('lc_copt',e.target.open?'1':'0')}catch(x){}});
 function toggleChat(){
   const open=$('#chat').classList.toggle('open');document.body.classList.toggle('chatopen',open);applyChatSize();
-  if(open){loadMsgImages();modeUi();$('#cTemp').value=CH.temp;$('#cMax').value=CH.max||'';fillChatSelects();renderChat();loadTools();$('#cIn').focus()}
+  if(open){loadMsgImages();modeUi();$('#cTemp').value=CH.temp;$('#cMax').value=CH.max||'';fillChatSelects();renderChat();renderAgents();renderChatQueue();loadTools();syncScheduledTasks();if(!schedulePollTimer)schedulePollTimer=setInterval(()=>{if($('#chat').classList.contains('open'))syncScheduledTasks()},30000);CH.agents.filter(a=>a.inbox?.length).forEach(a=>processLiveAgent(a.id));$('#cIn').focus()}
   syncTabs();
 }
 // ---- Workspace dialog: tools, permissions, system prompt, files (own button; works with or without the chat open)
@@ -1013,6 +1166,60 @@ function openWs(tab){
   document.querySelectorAll('#dWs [data-tool]').forEach(c=>c.checked=!!CH.tools[c.dataset.tool]);
   if(!dWs.open)dWs.showModal();
   loadTools().then(()=>{$('#cWsRoot').textContent=TOOLINFO?'Workspace folder on the controller: '+TOOLINFO.workspace:'';wsRefresh()});
+}
+function workerPrefs(){
+  try{return JSON.parse(localStorage.getItem('lc_worker_ops')||'{}')}catch(e){return {}}
+}
+function openWorkerSetup(){
+  const prefs=workerPrefs(),select=$('#workerControllerNode');
+  select.innerHTML='<option value="">Not in this node list</option>'+NODES.map(n=>`<option value="${esc(n.id)}">${esc(n.name)}</option>`).join('');
+  select.value=NODES.some(n=>n.id===prefs.controllerNode)?prefs.controllerNode:'';
+  $('#workerControllerIsWorker').checked=!!prefs.controllerIsWorker;
+  $('#workerSetupToken').value='';$('#workerSetupError').textContent='';
+  dWorkerSetup.showModal();
+}
+function workerActionConfig(){
+  const prefs=workerPrefs();
+  return {controller_node:prefs.controllerNode||'',controller_is_worker:!!prefs.controllerIsWorker};
+}
+function persistWorkerActionConfig(){
+  const value={controllerNode:$('#workerControllerNode').value,
+    controllerIsWorker:$('#workerControllerIsWorker').checked};
+  try{localStorage.setItem('lc_worker_ops',JSON.stringify(value))}catch(e){}
+  return {controller_node:value.controllerNode,controller_is_worker:value.controllerIsWorker};
+}
+function renderWorkerActionResults(action,results){
+  const box=$('#workerOpsStatus'),ok=results.filter(r=>r.status==='success').length,
+    skipped=results.filter(r=>r.status==='skipped').length,failed=results.filter(r=>r.status==='failed').length;
+  box.className=failed?'err':'mut small';box.textContent=`${action}: ${ok} succeeded, ${skipped} skipped, ${failed} failed\n`+
+    (results.length?results.map(r=>`${r.status.toUpperCase()} · ${r.node}: ${r.message}`).join('\n'):'No nodes are configured.');
+}
+async function installWorkerServices(){
+  const token=$('#workerSetupToken').value;
+  if(!/^[A-Za-z0-9._~+/=-]{12,256}$/.test(token)){
+    $('#workerSetupError').textContent='Enter a 12–256 character token using letters, numbers, . _ ~ + / = or -.';
+    return;
+  }
+  const config=persistWorkerActionConfig(),button=document.querySelector('#dWorkerSetup button.pri');
+  button.disabled=true;$('#workerSetupError').textContent='Installing on Linux workers…';
+  try{
+    const data=await api('/api/cluster/workers/install','POST',{...config,token});
+    dWorkerSetup.close();renderWorkerActionResults('Install autostart',data.results||[]);
+    await refresh();
+  }catch(e){$('#workerSetupError').textContent='Install failed: '+e.message}
+  finally{button.disabled=false}
+}
+async function runWorkerAction(action){
+  const labels={uninstall:'Uninstall autostart service',restart:'Restart all workers',update:'Update LlamaCluster on all'};
+  if(action==='uninstall'&&!confirm('Uninstall the autostart service on eligible nodes? Managed workers will stop; currently running models will stop too.'))return;
+  if(action==='restart'&&!confirm('Restart all configured workers? Running models will be restarted with their current settings.'))return;
+  if(action==='update'&&!confirm('Run git pull --ff-only origin main on every configured worker, then restart its worker process and running model? Workers with local changes will refuse the update.'))return;
+  const box=$('#workerOpsStatus');box.className='mut small';box.textContent=labels[action]+'…';
+  try{
+    const data=await api(`/api/cluster/workers/${action}`,'POST',workerActionConfig());
+    renderWorkerActionResults(labels[action],data.results||[]);
+    await refresh();
+  }catch(e){box.className='err';box.textContent=labels[action]+' failed: '+e.message}
 }
 $('#dWs').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.close()});
 async function wsClear(){
@@ -1094,13 +1301,13 @@ function fillChatSelects(){
   fill($('#cLeader'),[['','👑 Leader: auto (strongest)'],...(CH.leader&&!ready.some(n=>n.name===CH.leader)?[[CH.leader,'👑 '+CH.leader+' (not ready)']]:[]),...ready.map(n=>[n.name,'👑 '+n.name+' · '+String(n.info.server.config?.model||'').replace(/\.gguf$/i,'')])],CH.leader||'');
   CH.model=$('#cModel').value;CH.route=$('#cRoute').value;CH.leader=$('#cLeader').value;ctxSoon();
   $('#cOptSum').textContent='⚙ '+(CH.model?CH.model.replace(/\.gguf$/i,'').split('/').pop():'any model')+' · '+(CH.route||'auto')+' · '+CH.temp+'°';
-  effUi();
+  effUi();toolInfo();
 }
 CH.msamp=CH.msamp||{};
 function sampLoad(){const m=CH.model;if(m&&CH.msamp[m]){CH.temp=CH.msamp[m].temp;CH.max=CH.msamp[m].max;CH.effort=CH.msamp[m].effort||'';$('#cTemp').value=CH.temp;$('#cMax').value=CH.max||''}}
 function sampSave(){if(CH.model){CH.msamp[CH.model]={temp:CH.temp,max:CH.max,effort:CH.effort||''};saveChat()}}
-$('#cModel').onchange=()=>{CH.model=$('#cModel').value;CH.effort='';sampLoad();saveChat();effUi()};
-$('#cRoute').onchange=()=>{CH.route=$('#cRoute').value;saveChat();effUi()};
+$('#cModel').onchange=()=>{CH.model=$('#cModel').value;CH.effort='';sampLoad();saveChat();effUi();toolInfo()};
+$('#cRoute').onchange=()=>{CH.route=$('#cRoute').value;saveChat();effUi();toolInfo()};
 $('#cLeader').onchange=()=>{CH.leader=$('#cLeader').value;saveChat()};
 $('#cTemp').oninput=()=>{CH.temp=$('#cTemp').value===''?0.7:+$('#cTemp').value;saveChat();sampSave()};
 $('#cMax').oninput=()=>{CH.max=$('#cMax').value===''?'':+$('#cMax').value;saveChat();sampSave()};
@@ -1122,8 +1329,8 @@ function effUi(){
     sel.title=rs.kind==='effort'?'Low = quick answers, High = think longer.':'Turns the model\'s thinking on or off.';
     sel.value=opts.some(o=>o[0]===CH.effort)?CH.effort:'';
   }
-  const a=$('#cAttach');a.disabled=!c.vision;
-  a.title=c.vision?'Attach an image (or paste / drop one)':'The selected model can\'t read images. Load a multimodal model with its vision projector (node ⚙ Settings → Vision projector).';
+  const a=$('#cAttach');a.disabled=false;
+  a.title=c.vision?'Attach an image (or paste / drop one)':'Attach now; select a multimodal model with a loaded vision projector before sending.';
   $('#cOptSum').textContent=$('#cOptSum').textContent.replace(/ · 🧠.*$/,'')+(rs&&CH.effort?' · 🧠 '+CH.effort:'');
 }
 function addEffort(body,model,route,off){   // the model's own chat template decides what these mean (off = as little thinking as possible)
@@ -1134,13 +1341,28 @@ function addEffort(body,model,route,off){   // the model's own chat template dec
 $('#cEffort').oninput=()=>{CH.effort=$('#cEffort').value;saveChat();sampSave();effUi()};
 // ---- images: kept in memory + IndexedDB (a chat history with pictures would not fit in localStorage); messages only hold {id,name}
 const IMGS={};let PEND=[];
+function chatImageRefs(){
+  const refs=[],seen=new Set();
+  for(const m of CH.msgs||[]){
+    for(const image of m.images||[]){
+      if(image?.id&&!seen.has(image.id)&&IMGS[image.id]){seen.add(image.id);refs.push({id:image.id,name:image.name||'chat attachment'})}
+    }
+    if(m.image&&!seen.has(m.image)&&IMGS[m.image]){
+      seen.add(m.image);refs.push({id:m.image,name:m.image_name||'tool image'});
+    }
+  }
+  return refs;
+}
 let _idb=null;const IDB=()=>_idb||(_idb=new Promise(res=>{try{const r=indexedDB.open('lc_imgs',1);r.onupgradeneeded=()=>r.result.createObjectStore('i');r.onsuccess=()=>res(r.result);r.onerror=()=>res(null)}catch(e){res(null)}}));
 async function idbPut(id,v){const d=await IDB();if(d)try{d.transaction('i','readwrite').objectStore('i').put(v,id)}catch(e){}}
 async function idbGet(id){const d=await IDB();return d?new Promise(res=>{try{const r=d.transaction('i').objectStore('i').get(id);r.onsuccess=()=>res(r.result||null);r.onerror=()=>res(null)}catch(e){res(null)}}):null}
 async function idbClear(){const d=await IDB();if(d)try{d.transaction('i','readwrite').objectStore('i').clear()}catch(e){}}
 async function loadMsgImages(){
   let any=false;
-  for(const id of new Set(CH.msgs.flatMap(m=>[...(m.images||[]).map(i=>i.id),...(m.image?[m.image]:[])])))if(!IMGS[id]){const v=await idbGet(id);if(v){IMGS[id]=v;any=true}}
+  for(const id of new Set([
+    ...CH.msgs.flatMap(m=>[...(m.images||[]).map(i=>i.id),...(m.image?[m.image]:[])]),
+    ...CH.agents.flatMap(a=>a.messages.flatMap(m=>m.image?[m.image]:[]))
+  ]))if(!IMGS[id]){const v=await idbGet(id);if(v){IMGS[id]=v;any=true}}
   if(any)renderChat();
 }
 function shrinkImage(file,max=1280){   // big photos cost thousands of tokens; ~1280 px on the long side keeps text readable
@@ -1152,9 +1374,11 @@ function shrinkImage(file,max=1280){   // big photos cost thousands of tokens; ~
   });
 }
 async function addImages(files){
-  files=[...files].filter(f=>/^image\//.test(f.type));if(!files.length)return;
-  if(!capsNow().vision){alert('The selected model can\'t read images. Load a multimodal model with its vision projector (node ⚙ Settings → Vision projector), then pick it here.');return}
-  for(const f of files){
+  const selected=[...files],images=selected.filter(f=>/^image\//.test(f.type));
+  if(!images.length){if(selected.length)alert('Only image files are supported as chat attachments.');return}
+  const unsupported=selected.length-images.length;
+  if(unsupported)alert(`${unsupported} non-image file${unsupported===1?' was':'s were'} skipped. Chat attachments currently support images only.`);
+  for(const f of images){
     if(PEND.length>=6){alert('At most 6 images per message.');break}
     try{const d=await shrinkImage(f),id='im'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);IMGS[id]=d;idbPut(id,d);PEND.push({id,name:f.name||'image'})}
     catch(e){alert(e.message)}
@@ -1176,7 +1400,7 @@ function userContent(m,vis){   // OpenAI-style multimodal content; text-only mod
   if(!vis||!imgs.length)return (m.content||'')+`\n[${m.images.length} image${m.images.length>1?'s':''} attached earlier — not shown to this model]`;
   return [...(m.content?[{type:'text',text:m.content}]:[]),...imgs.map(i=>({type:'image_url',image_url:{url:IMGS[i.id]}}))];
 }
-$('#cFile').onchange=e=>{addImages(e.target.files);e.target.value=''};
+$('#cFile').addEventListener('change',e=>{addImages(e.target.files).catch(err=>alert('Could not attach image: '+err.message));e.target.value=''});
 $('#cIn').addEventListener('paste',e=>{const f=[...(e.clipboardData?.files||[])].filter(x=>/^image\//.test(x.type));if(f.length){e.preventDefault();addImages(f)}});
 (()=>{const c=$('#chat');
   c.addEventListener('dragover',e=>{if([...(e.dataTransfer?.types||[])].includes('Files')){e.preventDefault();c.classList.add('dropping')}});
@@ -1185,7 +1409,10 @@ $('#cIn').addEventListener('paste',e=>{const f=[...(e.clipboardData?.files||[])]
 })();
 const grow=()=>{const t=$('#cIn');t.style.height='auto';t.style.height=Math.min(t.scrollHeight,160)+'px'};
 $('#cIn').addEventListener('input',grow);
-$('#cIn').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!document.body.classList.contains('phone')){e.preventDefault();chatSend()}};
+$('#cIn').onkeydown=e=>{
+  if(e.key==='Enter'&&e.ctrlKey){e.preventDefault();queueChatMessage();return}
+  if(e.key==='Enter'&&!e.shiftKey&&!document.body.classList.contains('phone')){e.preventDefault();chatSend()}
+};
 
 function md(t){   // escape first, then a tiny, safe subset of markdown
   t=esc(t);
@@ -1205,7 +1432,7 @@ const calLogo=on=>`<svg class="cal${on?' on':''}" viewBox="0 0 32 32" aria-hidde
 function lastAsstIdx(){for(let i=CH.msgs.length-1;i>=0;i--)if(CH.msgs[i].role==='assistant')return i;return -1}
 function calState(m,i){
   const live=!!chatAbort&&CH.mode!=='orchestra'&&CH.mode!=='leader'&&i===lastAsstIdx();
-  let label='Calcium';
+  let label=m.agentName||'Calcium';
   if(live){
     if(!m.streaming)label='Using tools…';
     else if(m.content)label='Writing…';
@@ -1227,7 +1454,7 @@ $('#calBrand').innerHTML=calLogo(false)+'Calcium';
 const TCOPEN=new Set();
 const TCV={write_file:['✎','Writing…','Wrote'],edit_file:['✎','Editing…','Edited'],read_file:['📖','Reading…','Read'],list_files:['📂','Listing…','Listed'],
   search_files:['🔎','Searching files…','Searched files'],web_search:['🔍','Searching…','Searched'],fetch_url:['🌐','Fetching…','Fetched'],
-  delete_file:['🗑','Deleting…','Deleted'],exec_command:['⌨','Running…','Ran'],calc:['🧮','Calculating…','Calculated'],convert_units:['⚖','Converting…','Converted'],date_time:['🕒','Checking time…','Checked time'],question:['❓','Asking…','Asked'],task:['☑','Updating tasks…','Updated tasks'],spawn:['🧠','Spawning models…','Models returned'],runweb:['🌐','Running page…','Page ran'],playwright:['🌐','Testing open page…','Playwright finished']};
+  delete_file:['🗑','Deleting…','Deleted'],exec_command:['⌨','Running…','Ran'],calc:['🧮','Calculating…','Calculated'],convert_units:['⚖','Converting…','Converted'],date_time:['🕒','Checking time…','Checked time'],question:['❓','Asking…','Asked'],task:['☑','Updating tasks…','Updated tasks'],spawn:['🧠','Spawning agent…','Spawned'],tell:['💬','Telling agent…','Message queued'],interrupt:['⏹','Interrupting agent…','Agent redirected'],status:['ℹ','Checking agent status…','Status checked'],despawn:['✖','Despawning agent…','Agent removed'],agent_done:['✓','Finishing…','Finished'],runweb:['🌐','Running page…','Page ran'],playwright:['🌐','Testing open page…','Playwright finished'],view_image:['🖼','Viewing image…','Viewed image']};
 function pargs(src){   // JSON.parse that also copes with arguments that are still streaming (cut off mid-string)
   src=src||'{}';
   try{const v=JSON.parse(src);if(v&&typeof v==='object')return v}catch(e){}
@@ -1354,6 +1581,10 @@ function tcBody(tc,m,i){   // only built while the chip is open
     const image=S.res?.image&&IMGS[S.res.image]?`<img class="tcweb-img" src="${IMGS[S.res.image]}" alt="Screenshot of ${esc(a.path||'web page')}">`:'';
     return head(res.title||a.path,`${(res.console||[]).length||0} console lines`)+image+`<pre class="code"><code>${esc(logs||'(no console output)')}</code></pre>`+err;
   }
+  if(name==='view_image'){
+    const image=S.res?.image&&IMGS[S.res.image]?`<img class="tcweb-img" src="${IMGS[S.res.image]}" alt="${esc(res.path||res.name||'Viewed image')}">`:'';
+    return head(res.path||res.name||a.path||('Attachment '+(a.attachment||'')),image?'image loaded':'')+image+err;
+  }
   if(name==='spawn'){
     if(S.st==='run')return '<div class="tcmsg">delegating work to free nodes…</div>';
     const workers=res.workers||[];
@@ -1372,7 +1603,7 @@ function tcTarget(tc,a,S){
   if(['read_file','write_file','edit_file','delete_file'].includes(n))return a.path||'';
   if(n==='question')return a.question||'';
   if(n==='task')return (a.action||'')+(a.title?': '+a.title:Array.isArray(a.titles)&&a.titles.length?': '+a.titles.join(', '):a.id!=null?' #'+a.id+(a.status?' → '+a.status:''):'');
-  if(n==='runweb'||n==='playwright')return a.path||wsOpenPath||'';
+  if(n==='runweb'||n==='playwright'||n==='view_image')return a.path||a.attachment||wsOpenPath||'';
   if(n==='spawn')return (a.mode||'')+' · '+(a.model||'');
   const first=Object.values(a)[0];return first==null?'':(typeof first==='string'?first:JSON.stringify(first));
 }
@@ -1444,9 +1675,65 @@ function renderChat(){
   log.innerHTML=CH.msgs.map((m,i)=>`<div class="msg ${m.role}${m.plan?' isplan':''}${m.auto?' auto':''}" data-i="${i}">${m.role==='assistant'?whoHtml(m,i)+'<div class="mbody">'+msgHtml(m,i)+'</div>':msgHtml(m,i)}</div>`).join('')||`<div class="mut small emptyhi">${calLogo(false)}<div style="color:var(--tx);font-weight:600;font-size:15px">Hi, I'm Calcium</div>Ask something — the gateway picks the least-busy node, or choose one under “Send to”.<br>Tools, files and the system prompt live under 🗂 Workspace.<div class="sugg">${['What can you do in my workspace?','List the files in my workspace','Search the web for the latest llama.cpp release'].map(t=>`<button onclick="suggest(this.textContent)">${esc(t)}</button>`).join('')}</div></div>`;
   log.scrollTop=log.scrollHeight;renderBtw();ctxSoon();
 }
+function agentCtxCapacity(agent){
+  const node=NODES.find(n=>n.name===agent.node),cfg=node?.info?.server?.config||{},parallel=Math.max(1,+cfg.parallel||1);
+  return +cfg.ctx_size?{tokens:Math.floor(+cfg.ctx_size/parallel),name:agent.node,par:parallel,size:+cfg.ctx_size}:null;
+}
+function agentCtxState(agent){
+  const defs=activeTools(agent.model,agent.node,agent.id),e=ctxEstimate(agentApiMessages(agent),defs);
+  const cap=agentCtxCapacity(agent);
+  return {...ctxSegments(e,1,cap),cap};
+}
+function renderAgents(){
+  const box=$('#cAgents');if(!box)return;
+  const focus=document.activeElement,focusType=focus?.dataset?.agentPrompt?'prompt':focus?.dataset?.agentMessage?'message':'',
+    focusId=focusType?focus.dataset[focusType==='prompt'?'agentPrompt':'agentMessage']:null,
+    focusValue=focusId?focus.value:null,selection=focusId&&focus.setSelectionRange?[focus.selectionStart,focus.selectionEnd]:null;
+  const expanded=new Set([...box.querySelectorAll('.agent-card')].filter(card=>card.querySelector('.agent-detail')?.open).map(card=>card.dataset.agent));
+  box.hidden=!CH.agents.length;
+  box.innerHTML=CH.agents.map(agent=>{
+    const s=agentCtxState(agent),C=2*Math.PI*9,percent=Math.round(s.pct);
+    const history=agent.messages.filter(m=>m.role!=='system').slice(-24).map(m=>{
+      const label=m.role==='assistant'?agent.name:m.role==='tool'?'tool':m.role==='user'?'message':m.role;
+      const body=m.tool_calls?.length?m.tool_calls.map(tc=>`${tc.function.name}(${short(tc.function.arguments||'',180)})`).join('\n'):short(m.content||'',1200);
+      return `<div class="agent-line ${esc(m.role)}"><b>${esc(label)}</b>${esc(body)}</div>`;
+    }).join('');
+    box.querySelectorAll('.agent-card').forEach(card=>{if(expanded.has(card.dataset.agent))card.querySelector('.agent-detail').open=true});
+    return `<div class="agent-card" data-agent="${esc(agent.id)}">
+      <div class="agent-head"><svg class="agent-ring ${s.level}" viewBox="0 0 24 24" title="${percent}% context · ${fmtTok(s.used)} / ${fmtTok(s.size)} tokens"><circle class="tr" cx="12" cy="12" r="9"></circle><circle class="arc" cx="12" cy="12" r="9" transform="rotate(-90 12 12)" stroke-dasharray="${(s.pct/100*C).toFixed(2)} ${C.toFixed(2)}"></circle></svg>
+        <b>${esc(agent.name)}</b><span class="agent-meta">${esc(agent.model)} · ${esc(agent.status||'waiting')}${agent.last?` · ${esc(short(agent.last,90))}`:''}</span>
+        <button data-agent-action="interrupt" data-id="${esc(agent.id)}" title="Interrupt and redirect this agent">Interrupt</button><button data-agent-action="despawn" data-id="${esc(agent.id)}" title="Remove this agent">×</button></div>
+      <details class="agent-detail"><summary>Conversation and system prompt</summary>
+        <div class="agent-history">${history||'<div class="mut small">No messages yet.</div>'}</div>
+        <label>System prompt<textarea rows="3" data-agent-prompt="${esc(agent.id)}">${esc(agent.systemPrompt||'')}</textarea></label>
+        <div class="agent-send"><input data-agent-message="${esc(agent.id)}" placeholder="Message ${esc(agent.name)}…"><button data-agent-action="tell" data-id="${esc(agent.id)}">Tell</button></div>
+      </details></div>`;
+  }).join('');
+  box.querySelectorAll('[data-agent-prompt]').forEach(el=>el.oninput=()=>{
+    const agent=CH.agents.find(a=>a.id===el.dataset.agentPrompt);if(agent){agent.systemPrompt=el.value;saveChat()}
+  });
+  box.querySelectorAll('[data-agent-action]').forEach(button=>button.onclick=async()=>{
+    const {id,agentAction}=button.dataset,agent=CH.agents.find(a=>a.id===id);if(!agent)return;
+    if(agentAction==='despawn'){removeLiveAgent(agent,'removed by Calcium');return}
+    const input=box.querySelector(`[data-agent-message="${id}"]`),text=(input?.value||'').trim();
+    if(!text){input?.focus();return}
+    await messageLiveAgent(agent,text,agentAction==='interrupt','Calcium');
+    if(input)input.value='';
+  });
+  if(focusId){
+    const next=box.querySelector(`[data-agent-${focusType}="${focusId}"]`);
+    if(next){if(focusType==='message')next.value=focusValue;next.focus();if(selection)next.setSelectionRange(...selection)}
+  }
+}
 function renderBtw(){
-  const box=$('#cBtw');if(!box)return;const items=(CH.btw||[]).slice(-3);box.hidden=!items.length;
-  box.innerHTML=items.map(x=>`<div class="btwitem"><b>/btw ${esc(x.question)}</b><div>${x.error?`<span class="err">${esc(x.error)}</span>`:md(x.answer||'Thinking…')}</div>${x.node?`<div class="mut small">served by ${esc(x.node)}</div>`:''}</div>`).join('');
+  const box=$('#cBtw');if(!box)return;const items=(CH.btw||[]).slice(-3);items.forEach(x=>{if(!x.id)x.id=`btw-${Date.now()}-${++btwSeq}`});box.hidden=!items.length;
+  box.innerHTML=items.map(x=>`<div class="btwitem"><div class="btwhead"><b>/btw ${esc(x.question)}</b><button class="btwclose" title="Cancel or dismiss side question" aria-label="Cancel or dismiss side question" onclick="cancelBtw('${esc(x.id)}')">×</button></div><div>${x.error?`<span class="err">${esc(x.error)}</span>`:md(x.answer||'Thinking…')}</div>${x.node?`<div class="mut small">served by ${esc(x.node)}</div>`:''}</div>`).join('');
+}
+const btwControllers=new Map();let btwSeq=0;
+function cancelBtw(id){
+  const item=CH.btw.find(x=>x.id===id);if(!item)return;
+  btwControllers.get(id)?.abort();btwControllers.delete(id);
+  CH.btw=CH.btw.filter(x=>x.id!==id);renderBtw();saveChat();
 }
 function updateLast(){
   const el=$('#cLog').lastElementChild,m=CH.msgs[CH.msgs.length-1];if(!el||!m)return;
@@ -1458,9 +1745,9 @@ function updateLast(){
 }
 function wipeChat(){   // everything that can end up in the model's context goes: messages (incl. tool results), summary, software-mode state, pending question
   PEND=[];renderPend();idbClear();for(const k in IMGS)delete IMGS[k];
-  CH.msgs=[];CH.btw=[];CH.tasks=[];CH.taskSeq=0;CH.summary='';CH.sw=null;
+  CH.msgs=[];for(const ctl of btwControllers.values())ctl.abort();btwControllers.clear();for(const ctl of agentRuns.values())ctl.abort();CH.agents=[];CH.agentNotes=[];CH.agentInterrupt=false;CH.btw=[];CH.queue=[];CH.tasks=[];CH.taskSeq=0;CH.summary='';CH.sw=null;
   const box=$('#cAsk');if(box){box.hidden=true;box.innerHTML=''}
-  saveChat();renderChat();renderTasks();swBarSync();
+  saveChat();renderChat();renderAgents();renderChatQueue();renderTasks();swBarSync();
 }
 function chatClear(){
   const run=chatAbort;
@@ -1494,13 +1781,13 @@ function cleanForApi(src){   // drop tool calls with unparseable arguments, and 
   });
   return out.filter(m=>!(m.role==='tool'&&dead.has(m.tool_call_id)));
 }
-function apiMessages(extraUser,noImages){
-  const sys=sysText()+(CH.mode==='plan'?PLAN_NOTE:CH.mode==='ask'?ASK_NOTE():CH.mode==='software'&&CH.sw?SOFTWARE_NOTE(CH.sw):'')
+function apiMessages(extraUser,noImages,model=CH.model,route=CH.route){
+  const sys=sysText(model,route)+(CH.mode==='plan'?PLAN_NOTE:CH.mode==='ask'?ASK_NOTE():CH.mode==='software'&&CH.sw?SOFTWARE_NOTE(CH.sw):'')
     +(CH.summary?'\n\n# Earlier in this conversation (summary)\nThe conversation was compacted to save context. What happened before the messages below:\n'+CH.summary:'');
   let src=CH.msgs.filter(m=>m.role!=='orchestra'&&m.role!=='compact'&&!m.local&&!m.streaming);     // (the reply being streamed right now is never sent back)
   if(CH.mode==='software')src=swWindow(src);
   src=cleanForApi(src);
-  const vis=!noImages&&capsNow().vision;
+  const vis=!noImages&&capsFor(model,route).vision;
   const msgs=src.map(m=>m.role==='tool'?{role:'tool',tool_call_id:m.tool_call_id,content:m.image&&vis&&IMGS[m.image]?[{type:'text',text:m.content},{type:'image_url',image_url:{url:IMGS[m.image]}}]:m.content+(m.image&&!vis?'\n[runweb screenshot omitted: this model is not vision-capable]':'')}
     :m.role==='assistant'&&m.tool_calls?.length?{role:'assistant',content:m.content||'',tool_calls:m.tool_calls}
     :m.role==='user'&&m.images?.length?{role:'user',content:userContent(m,vis)}
@@ -1509,18 +1796,27 @@ function apiMessages(extraUser,noImages){
   return [...(sys?[{role:'system',content:sys}]:[]),...msgs];
 }
 // ---- context gauge: a ring next to the message box shows how full the context window is; click for the breakdown
-const CTX_CAT=[['sys','System prompt','#f87171'],['tools','Tool','#ef4444'],['toolOthers','Tool others','#f97316'],['toolOutputs','Tool outputs','#fb923c'],['user','User','#4ade80'],['free','Free space','#6ea8ff']];
+const CTX_CAT=[['sys','System prompt','#f87171'],['tools','Tool','#ef4444'],['toolOthers','Tool others','#f97316'],['toolOutputs','Tool outputs','#fb923c'],['user','User','#4ade80'],['image','Image context','#22d3ee'],['free','Free space','#6ea8ff']];
 const CTX_MSG_OVERHEAD=5;                         // chat-template tokens around every message
 function ctxEstimate(msgs,tools){                 // ≈ tokens of a request, by category (≈3.8 characters per token for text, 3.2 for JSON / code)
-  const t=(n,r)=>Math.ceil((n||0)/r),e={sys:0,tools:0,toolOthers:0,toolOutputs:0,user:0};
+  const t=(n,r)=>Math.ceil((n||0)/r),e={sys:0,tools:0,toolOthers:0,toolOutputs:0,user:0,image:0};
   for(const m of msgs||[]){
-    const c=Array.isArray(m.content)?m.content.map(x=>x.type==='text'?x.text:' '.repeat(2300)).join(''):typeof m.content==='string'?m.content:JSON.stringify(m.content||'');   // an image ≈ 600 tokens
+    let c=typeof m.content==='string'?m.content:JSON.stringify(m.content||''),images=0;
+    if(Array.isArray(m.content)){
+      c='';
+      for(const part of m.content){
+        if(part.type==='text')c+=part.text||'';
+        else if(part.type==='image_url'||part.type==='image')images++;
+        else c+=' '.repeat(2300);
+      }
+    }
+    e.image+=images*t(2300,3.8);                   // images are roughly 600 tokens each
     if(m.role==='system')e.sys+=t(c.length,3.8)+CTX_MSG_OVERHEAD;                    // system prompt (incl. its tool notes and the mode's note)
     else if(m.role==='tool')e.toolOutputs+=t(c.length,3.2)+CTX_MSG_OVERHEAD;         // results of tool calls
     else{e.user+=t(c.length,3.8)+CTX_MSG_OVERHEAD;if(m.tool_calls?.length)e.toolOthers+=t(JSON.stringify(m.tool_calls).length,3.2)}   // your messages and replies; tool-call JSON is counted separately
   }
   if(tools?.length)e.tools=t(JSON.stringify(tools).length,3.2);                       // the tool definitions sent with every request
-  e.total=e.sys+e.tools+e.toolOthers+e.toolOutputs+e.user;return e;
+  e.total=e.sys+e.tools+e.toolOthers+e.toolOutputs+e.user+e.image;return e;
 }
 function ctxCapacity(){                           // context tokens one conversation can use on the node(s) that will answer: ctx_size ÷ parallel slots (smallest if several)
   const rdy=NODES.filter(n=>n.info?.server?.state==='ready');
@@ -1535,12 +1831,13 @@ function ctxCapacity(){                           // context tokens one conversa
   return {...m,nodes:x.length,fixed:fixed||x.length===1};
 }
 function ctxSegments(e,scale,cap){                // the numbers behind the ring and the menu
-  const u={};for(const k of ['sys','tools','toolOthers','toolOutputs','user'])u[k]=Math.round((e[k]||0)*scale);
-  const used=u.sys+u.tools+u.toolOthers+u.toolOutputs+u.user,size=cap?.tokens||0,free=size?Math.max(0,size-used):0;
+  const u={};for(const k of ['sys','tools','toolOthers','toolOutputs','user','image'])u[k]=Math.round((e[k]||0)*scale);
+  const used=u.sys+u.tools+u.toolOthers+u.toolOutputs+u.user+u.image,size=cap?.tokens||0,free=size?Math.max(0,size-used):0;
   const pct=size?Math.min(100,used/size*100):0,level=!size?'':pct>=95?'crit':pct>=75?'warn':'';   // orange from 75 %, red from 95 %
   const den=Math.max(size,used)||1;
   return {used,size,free,pct,level,segs:CTX_CAT.map(([id,label,color])=>{const tokens=id==='free'?free:u[id];return {id,label,color,tokens,pct:tokens/den*100}})};
 }
+function ctxMenuSegments(s){return s.segs.filter(x=>(x.id!=='image'||x.tokens>0)&&(x.id!=='free'||s.size))}
 function ctxState(){
   const e=ctxEstimate(apiMessages(),activeTools()),last=CH.msgs[CH.msgs.length-1];
   if(last?.streaming){e.user+=Math.ceil((last.content||'').length/3.8);if(last.tool_calls?.length)e.toolOthers+=Math.ceil(JSON.stringify(last.tool_calls).length/3.2)}   // the reply being written counts too
@@ -1562,8 +1859,8 @@ function ctxMenuFill(s){
   $('#cCtxMenu').innerHTML=`<div class="cx-h"><b>Context</b><span>${s.size?Math.round(s.pct)+'% full':'≈ '+fmtTok(s.used)+' tokens'}</span></div>`
     +`<div class="mut small">${s.size?fmtTok(s.used)+' / '+fmtTok(s.size)+' tokens · ':''}${where}</div>`
     +`<div class="cx-bar">${s.segs.filter(x=>x.tokens>0).map(x=>`<i style="width:${x.pct}%;background:${x.color}" title="${esc(x.label)}"></i>`).join('')}</div>`
-    +s.segs.filter(x=>x.id!=='free'||s.size).map(x=>`<div class="cx-row"><span class="dot" style="background:${x.color}"></span><span class="n">${esc(x.label)}</span><span class="v">${fmtTok(x.tokens)} · ${x.pct<0.1&&x.tokens?'<0.1':x.pct.toFixed(1)}%</span></div>`).join('')
-    +`<div class="mut small" style="margin-top:6px">≈ estimate${s.calibrated?', matched to the last reply':''}. “Tool” is the tool definitions, “Tool others” the call JSON, and “Tool outputs” the returned results.${CH.mode==='orchestra'||CH.mode==='leader'?' Workers have their own context windows.':''}</div>`;
+    +ctxMenuSegments(s).map(x=>`<div class="cx-row"><span class="dot" style="background:${x.color}"></span><span class="n">${esc(x.label)}</span><span class="v">${fmtTok(x.tokens)} · ${x.pct<0.1&&x.tokens?'<0.1':x.pct.toFixed(1)}%</span></div>`).join('')
+    +`<div class="mut small" style="margin-top:6px">≈ estimate${s.calibrated?', matched to the last reply':''}. “Tool” is the tool definitions, “Tool others” the call JSON, and “Tool outputs” the returned results. Image context appears when images are sent to a vision-capable model.${CH.mode==='orchestra'||CH.mode==='leader'?' Workers have their own context windows.':''}</div>`;
 }
 function ctxMenu(){
   const m=$('#cCtxMenu');if(!m.hidden){m.hidden=true;return}
@@ -1576,6 +1873,7 @@ document.addEventListener('keydown',e=>{const m=$('#cCtxMenu');if(e.key==='Escap
 // ---- /compact: summarise the older part of the chat so it fits again (also runs by itself at 97 % of the context window)
 const AUTO_COMPACT_PCT=97;
 const COMPACT_SYS=`You compress a conversation between a user and an AI assistant (which can use tools: files, shell, web search) so the assistant can carry on as if it remembered everything. Write a dense, factual summary in plain text, no preamble. Cover, where relevant: what the user wants (goals, requirements, preferences, constraints); decisions made and why; files created or changed (exact paths) and what they contain; commands run and their important results; errors met and how they were fixed; the current state of the work; what is still to do. Keep exact names, paths, numbers, URLs and short code snippets that will be needed later. Never invent anything. Under 600 words.`;
+let SLASH_FILES=null,SLASH_FILES_AT=0,slashFilesLoading=null,schedulePollTimer=0;
 function notice(text){CH.msgs.push({role:'assistant',local:true,content:text});saveChat();renderChat()}
 function compactTranscript(msgs,budget){
   const parts=[];
@@ -1631,29 +1929,182 @@ function needsCompact(){   // full AND the conversation (not the fixed system pr
   const conv=s.segs.filter(x=>['user','toolOthers','toolOutputs'].includes(x.id)).reduce((a,x)=>a+x.tokens,0);
   return conv>=s.size*0.25;
 }
-const SLASH=[['/btw','Ask a side question without interrupting the current reply'],['/compact','Summarise the conversation to free up context (add a focus after it if you like)'],['/clear','Clear the chat']];
-function slashUi(){
-  const m=/^\/(\w*)$/.exec($('#cIn').value),items=m?SLASH.filter(c=>c[0].startsWith('/'+m[1].toLowerCase())):[],b=$('#cSlash');
-  b.hidden=!items.length;
-  b.innerHTML=items.map(([c,d])=>`<button data-c="${c}"><b>${c}</b> <span class="mut">${esc(d)}</span></button>`).join('');
-  b.querySelectorAll('button').forEach(x=>x.onclick=()=>{$('#cIn').value=x.dataset.c+' ';slashUi();grow();$('#cIn').focus()});
+const SLASH=[['/btw','Ask a side question without interrupting the current reply'],['/models','List ready models'],['/read','Read a workspace text file into the chat'],['/view','View a workspace image with the current model'],['/schedule','Schedule a one-time prompt (local time)'],['/compact','Summarise the conversation to free up context (add a focus after it if you like)'],['/clear','Clear the chat']];
+async function workspaceSlashFiles(){
+  if(SLASH_FILES&&Date.now()-SLASH_FILES_AT<15000)return SLASH_FILES;
+  if(!slashFilesLoading)slashFilesLoading=api('/api/workspace').then(data=>{SLASH_FILES_AT=Date.now();return SLASH_FILES=(data.files||[]).map(f=>f.path)}).finally(()=>slashFilesLoading=null);
+  return slashFilesLoading;
+}
+function slashSetItems(items){
+  const b=$('#cSlash');b.hidden=!items.length;
+  b.innerHTML=items.map(item=>item.path
+    ?`<button data-path="${esc(item.path)}"><b>${esc(item.path)}</b> <span class="mut">file</span></button>`
+    :`<button data-c="${item.command}"><b>${item.command}</b> <span class="mut">${esc(item.description)}</span></button>`).join('');
+  b.querySelectorAll('[data-c]').forEach(x=>x.onclick=()=>{$('#cIn').value=x.dataset.c+' ';slashUi();grow();$('#cIn').focus()});
+  b.querySelectorAll('[data-path]').forEach(x=>x.onclick=()=>{const m=/^\/(read|view)\s+/i.exec($('#cIn').value);if(!m)return;$('#cIn').value=`/${m[1].toLowerCase()} ${x.dataset.path} `;slashUi();grow();$('#cIn').focus()});
+}
+async function slashUi(){
+  const value=$('#cIn').value;
+  const command=/^\/([\w]*)$/.exec(value);
+  if(command){slashSetItems(SLASH.filter(([c])=>c.startsWith('/'+command[1].toLowerCase())).map(([c,description])=>({command:c,description})));return}
+  const fileCommand=/^\/(read|view)\s+([^\n]*)$/i.exec(value);
+  if(!fileCommand){slashSetItems([]);return}
+  try{
+    const files=await workspaceSlashFiles();
+    if($('#cIn').value!==value)return;
+    const query=fileCommand[2].trim().toLowerCase(),isImage=/^view$/i.test(fileCommand[1]);
+    const matches=files.filter(path=>(!isImage||/\.(jpe?g|png|webp|gif|bmp)$/i.test(path))&&
+      (!query||path.toLowerCase().startsWith(query)||path.toLowerCase().split('/').pop().startsWith(query))).slice(0,8);
+    slashSetItems(matches.map(path=>({path})));
+  }catch(e){if($('#cIn').value===value)slashSetItems([])}
 }
 $('#cIn').addEventListener('input',slashUi);
 async function runSlash(cmd,arg){
   if(cmd==='clear'){chatClear();return}
+  if(cmd==='models'){
+    const ready=NODES.filter(n=>n.info?.server?.state==='ready'&&n.info.server.config?.model);
+    notice(ready.length?'Ready models:\n'+ready.map(n=>`- ${n.name}: ${n.info.server.config.model}`).join('\n'):'No model is currently ready.');
+    return;
+  }
+  if(cmd==='read'||cmd==='view'){
+    await runFileSlash(cmd,arg);
+    return;
+  }
+  if(cmd==='schedule'){
+    await runScheduleSlash(arg);
+    return;
+  }
   const ctl=chatAbort=new AbortController();$('#cSend').textContent='Stop';syncBusy();
   try{await compactChat(arg,{signal:ctl.signal})}
-  finally{if(ctl.cleared)wipeChat();chatAbort=null;$('#cSend').textContent='Send';syncBusy();saveChat();renderChat()}
+  finally{
+    if(ctl.cleared)wipeChat();
+    chatAbort=null;flushAgentMessages();const resume=CH.agentInterrupt;CH.agentInterrupt=false;
+    $('#cSend').textContent='Send';syncBusy();saveChat();renderChat();
+    if(resume)setTimeout(()=>{if(!chatAbort)chatSend(true)},0);
+  }
+}
+function parseScheduleArg(arg,now=new Date()){
+  const parts=String(arg||'').trim().split(/\s+/).filter(Boolean);
+  let time=null,date=null,used=0;
+  const combined=/^(\d{2}:\d{2})-(\d{2}-\d{2})$/.exec(parts[0]||'');
+  if(combined){time=combined[1];date=combined[2];used=1}
+  else{
+    while(used<parts.length&&used<2){
+      const token=parts[used];
+      if(!time&&/^\d{2}:\d{2}$/.test(token)){time=token;used++;continue}
+      if(!date&&/^(?:\d{4}-)?\d{2}-\d{2}$/.test(token)){date=token;used++;continue}
+      break;
+    }
+  }
+  const prompt=parts.slice(used).join(' ').trim();
+  if(!prompt)throw new Error('Add the prompt after the optional time/date. Example: /schedule 09:00-11-28 check for new reports');
+  if(!time&&!date)throw new Error('Include a time (HH:MM), date (MM-DD), or both before the prompt.');
+  const [hour,minute]=(time||'09:00').split(':').map(Number);
+  if(hour>23||minute>59)throw new Error('Time must use 24-hour HH:MM format.');
+  let year=now.getFullYear(),month=now.getMonth()+1,day=now.getDate(),explicitYear=false;
+  if(date){
+    const m=/^(?:(\d{4})-)?(\d{2})-(\d{2})$/.exec(date);explicitYear=!!m[1];
+    if(explicitYear)year=Number(m[1]);
+    month=Number(m[2]);day=Number(m[3]);
+  }
+  const validLocal=d=>d.getFullYear()===year&&d.getMonth()===month-1&&d.getDate()===day&&d.getHours()===hour&&d.getMinutes()===minute;
+  let due;
+  if(date&&!explicitYear){
+    for(let candidateYear=now.getFullYear();candidateYear<=now.getFullYear()+8;candidateYear++){
+      year=candidateYear;const candidate=new Date(year,month-1,day,hour,minute,0,0);
+      if(validLocal(candidate)&&candidate>now){due=candidate;break}
+    }
+    if(!due)throw new Error('Date is not valid or has no upcoming occurrence.');
+  }else if(date){
+    due=new Date(year,month-1,day,hour,minute,0,0);
+    if(!validLocal(due))throw new Error('Date or local time is not valid.');
+    if(due<=now)throw new Error('That date and time has already passed.');
+  }else{
+    due=new Date(year,month-1,day,hour,minute,0,0);
+    if(due<=now)due=new Date(year,month-1,day+1,hour,minute,0,0);
+    if(due.getHours()!==hour||due.getMinutes()!==minute)throw new Error('That local time does not exist on the selected date.');
+  }
+  return {prompt,dueAt:due.getTime(),localTime:due.toLocaleString()};
+}
+async function runScheduleSlash(arg){
+  const text=String(arg||'').trim();
+  if(/^list$/i.test(text)){
+    const tasks=await syncScheduledTasks();
+    const details=$('#cSchedules details');if(details)details.open=true;
+    if(tasks&&tasks.length===0)notice('No scheduled tasks.');
+    return;
+  }
+  const cancel=/^cancel\s+([\w-]+)$/i.exec(text);
+  if(cancel){await api(`/api/scheduled-tasks/${encodeURIComponent(cancel[1])}`,'DELETE');await syncScheduledTasks();return}
+  try{
+    const parsed=parseScheduleArg(text);
+    const task=await api('/api/scheduled-tasks','POST',{prompt:parsed.prompt,due_at:parsed.dueAt/1000,
+      model:CH.model,target:CH.route,system_prompt:CH.sys2});
+    await syncScheduledTasks();
+    notice(`Scheduled task ${task.id} for ${parsed.localTime} (local time): ${parsed.prompt}`);
+  }catch(e){notice('Could not schedule task: '+e.message)}
+}
+async function syncScheduledTasks(){
+  try{
+    const {tasks}=await api('/api/scheduled-tasks');
+    const box=$('#cSchedules');
+    if(!box)return tasks;
+    box.hidden=!tasks.length;
+    if(!tasks.length){box.innerHTML='';return tasks}
+    box.innerHTML=`<details><summary>⏰ Scheduled tasks · ${tasks.filter(t=>['scheduled','running'].includes(t.status)).length} active</summary>${tasks.slice(-30).reverse().map(t=>{
+      const due=new Date(t.due_at*1000).toLocaleString();
+      const canCancel=['scheduled','running'].includes(t.status);
+      return `<div class="schedule-item"><div class="schedule-body"><b>${esc(t.status)}</b> · ${esc(due)} · ${esc(t.prompt)}${t.result?`<div class="schedule-result">${esc(t.result)}</div>`:''}${t.error?`<div class="err">${esc(t.error)}</div>`:''}</div>${canCancel?`<button class="small" onclick="cancelSchedule('${esc(t.id)}')">Cancel</button>`:''}</div>`;
+    }).join('')}</details>`;
+    return tasks;
+  }catch(e){
+    const box=$('#cSchedules');
+    if(box){box.hidden=false;box.innerHTML=`<div class="err">Scheduled tasks unavailable: ${esc(e.message)}</div>`}
+    return false;
+  }
+}
+async function cancelSchedule(id){
+  try{await api(`/api/scheduled-tasks/${encodeURIComponent(id)}`,'DELETE');await syncScheduledTasks()}
+  catch(e){notice('Could not cancel scheduled task: '+e.message)}
+}
+async function runFileSlash(cmd,path){
+  path=String(path||'').trim().replace(/^(["'])(.*)\1$/,'$2');
+  if(!path){notice(`Usage: /${cmd} workspace-relative-path`);return}
+  if(chatAbort){notice(`Stop the current reply before using /${cmd}.`);return}
+  try{
+    let content='',images;
+    if(cmd==='read'){
+      const response=await api('/api/tools/run','POST',{name:'read_file',arguments:{path},permission:'semi'});
+      const result=JSON.parse(response.result||'{}');
+      if(result.error)throw new Error(result.error);
+      content=`Read this workspace file and respond to its contents. File: ${result.path}\n\n${result.content}${result.truncated?'\n[File content was truncated.]':''}`;
+    }else{
+      if(!capsNow().vision)throw new Error('Select a model with image input enabled before using /view.');
+      const response=await api('/api/tools/run','POST',{name:'view_image',arguments:{path},permission:'semi'});
+      const result=JSON.parse(response.result||'{}');
+      if(result.error)throw new Error(result.error);
+      if(!result.image_base64||!result.mime_type)throw new Error('The image tool returned no image data.');
+      const id='view'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+      IMGS[id]=`data:${result.mime_type};base64,${result.image_base64}`;await idbPut(id,IMGS[id]);
+      content=`View and describe this workspace image: ${result.path||path}`;
+      images=[{id,name:result.path||path}];
+    }
+    CH.msgs.push({role:'user',content,...(images?{images}:{})});
+    saveChat();renderChat();await chatSend(true);
+  }catch(e){notice(`/${cmd} failed: ${e.message}`)}
 }
 async function runBtw(question){
-  if(!question){CH.btw.push({question:'',answer:'Usage: /btw followed by a side question.'});renderBtw();saveChat();return}
-  const item={question,answer:'Thinking…'};CH.btw.push(item);CH.btw=CH.btw.slice(-3);renderBtw();
+  if(!question){CH.btw.push({id:`btw-${Date.now()}-${++btwSeq}`,question:'',answer:'Usage: /btw followed by a side question.'});renderBtw();saveChat();return}
+  const item={id:`btw-${Date.now()}-${++btwSeq}`,question,answer:'Thinking…'},ctl=new AbortController();btwControllers.set(item.id,ctl);CH.btw.push(item);
+  while(CH.btw.length>3){const removed=CH.btw.shift();btwControllers.get(removed.id)?.abort();btwControllers.delete(removed.id)}
+  renderBtw();
   try{
     if(!TOOLINFO)await loadTools();
-    const out=await llmCall({messages:btwMessages(question),route:CH.route,model:CH.model,signal:new AbortController().signal,max:CH.max||512});
-    item.answer=out.content||out.reasoning||'(No answer returned)';item.node=out.node;
-  }catch(e){item.error=e.message||String(e)}
-  renderBtw();saveChat();
+    if(ctl.signal.aborted)return;
+    const out=await llmCall({messages:btwMessages(question),route:CH.route,model:CH.model,signal:ctl.signal,max:CH.max||512});
+    if(CH.btw.includes(item)){item.answer=out.content||out.reasoning||'(No answer returned)';item.node=out.node}
+  }catch(e){if(CH.btw.includes(item)&&e.name!=='AbortError')item.error=e.message||String(e)}
+  finally{btwControllers.delete(item.id);if(CH.btw.includes(item)){renderBtw();saveChat()}}
 }
 function btwMessages(question){
   const src=apiMessages(null,true),out=[];
@@ -1744,9 +2195,22 @@ async function runTool(tc,context={}){
   const info=TOOLINFO?.tools.find(t=>t.function.name===tc.function.name);
   if(!info||!CH.tools[info.group])return JSON.stringify({error:'tool is not enabled'});
   if(!groupOk(info.group))return JSON.stringify({error:CH.mode==='plan'?'plan mode is read-only — describe this in the plan instead':CH.mode==='ask'?'ask mode only reads the workspace — this tool is not available here':info.group==='question'?'the user cannot be asked questions in this mode — decide yourself':'tool is not available in this mode'});
+  if(tc.function.name==='view_image'){
+    if(!capsFor(context.model||CH.model,context.node||CH.route).vision)return JSON.stringify({error:'view_image requires a running model with image input enabled and a vision projector loaded'});
+    if(args.attachment!=null){
+      if(args.path)return JSON.stringify({error:'choose either a chat attachment number or a workspace path, not both'});
+      const images=chatImageRefs(),index=Number(args.attachment);
+      if(!Number.isInteger(index)||index<1||index>images.length)return JSON.stringify({error:'no chat image with attachment number '+args.attachment});
+      if(effPerm()==='manual'&&!confirm(approvalText(tc.function.name,args,'manual mode: every tool call needs your approval')))
+        return JSON.stringify({error:'the user declined this tool call - do not retry it; ask what they want instead'});
+      const image=images[index-1];tc.web_image=image.id;tc.web_image_name=image.name;
+      return JSON.stringify({source:'chat attachment',name:image.name});
+    }
+    if(!args.path)return JSON.stringify({error:'provide a workspace image path or a chat attachment number'});
+  }
   if(tc.function.name==='question')return await askUser(args);     // these two need the user's page, not the controller
   if(tc.function.name==='task')return taskRun(args);
-  if(tc.function.name==='spawn')return await spawnRun(args);
+  if(['spawn','tell','interrupt','status','despawn','agent_done'].includes(tc.function.name))return await runAgentTool(tc.function.name,args,context);
   if(tc.function.name==='playwright'){
     if(!wsOpenPath||wsIsNew)return JSON.stringify({error:'open and save an HTML file in Workspace → Files before using Playwright'});
     args.path=wsOpenPath;
@@ -1765,13 +2229,236 @@ async function runTool(tc,context={}){
     if((tc.function.name==='runweb'||tc.function.name==='playwright')&&r.result){
       try{const data=JSON.parse(r.result);if(data.screenshot){const id='web'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);IMGS[id]='data:image/jpeg;base64,'+data.screenshot;await idbPut(id,IMGS[id]);tc.web_image=id;delete data.screenshot}return JSON.stringify(data)}catch(e){}
     }
+    if(tc.function.name==='view_image'&&r.result){
+      const data=JSON.parse(r.result);
+      if(data.error)return JSON.stringify(data);
+      if(typeof data.image_base64!=='string'||typeof data.mime_type!=='string')throw new Error('view_image returned an invalid image response');
+      const id='view'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+      IMGS[id]=`data:${data.mime_type};base64,${data.image_base64}`;await idbPut(id,IMGS[id]);
+      tc.web_image=id;tc.web_image_name=data.path||'workspace image';delete data.image_base64;return JSON.stringify(data);
+    }
     return r.result;
   }catch(e){return JSON.stringify({error:e.message})}
 }
-async function spawnRun(args){
+function agentDefaultPrompt(name){
+  return DEFAULT_SYS.replace(/Calcium/g,name)+`\n\nYou are a live participant in Calcium's chat. Work on your assignment, use tell to communicate with the other agents, and call agent_done when you consider your work complete.`;
+}
+function agentSystemText(agent){
+  return `${agent.systemPrompt||agentDefaultPrompt(agent.name)}${toolNotes(agent.model,agent.node,agent.id)}`;
+}
+function agentApiMessages(agent){
+  const vision=capsFor(agent.model,agent.node).vision;
+  return agent.messages.map(m=>{
+    if(m.role!=='tool'||!m.image)return m;
+    if(vision&&IMGS[m.image])return {...m,content:[{type:'text',text:m.content},{type:'image_url',image_url:{url:IMGS[m.image]}}]};
+    return {...m,content:(m.content||'')+'\n[image omitted: this model cannot inspect images or the image is not available]'};
+  });
+}
+function compactAgentHistory(agent){
+  const defs=activeTools(agent.model,agent.node,agent.id),cap=agentCtxCapacity(agent),source=agent.messages;
+  if(!cap||ctxEstimate(agentApiMessages(agent),defs).total<cap.tokens*.88)return false;
+  let cut=Math.max(2,source.length-12);
+  while(cut<source.length&&source[cut]?.role!=='user')cut++;
+  if(cut>=source.length){
+    cut=Math.max(2,source.length-12);
+    while(cut>1&&source[cut]?.role!=='user')cut--;
+  }
+  if(cut<=1||cut>=source.length)return false;
+  const budget=Math.min(6000,Math.max(1000,Math.floor(cap.tokens*1.5)));
+  const summary=compactTranscript(source.slice(1,cut),budget);
+  agent.messages=[source[0],{role:'user',content:`Earlier conversation summary:\n${summary}\n\nContinue with the recent messages below.`},...source.slice(cut)];
+  saveChat();renderAgents();
+  return true;
+}
+function agentSeedMessages(task){
+  const history=CH.msgs.filter(m=>!m.local&&!m.streaming&&m.role!=='compact'&&m.role!=='orchestra');
+  const context=compactTranscript(history.slice(-20),6500);
+  const images=chatImageRefs().map((x,i)=>`${i+1}: ${x.name}`).join('\n');
+  return [{role:'system',content:''},{role:'user',content:
+    `You are joining this conversation as a live agent. Read the context and then work on your assignment.\n\n`+
+    (CH.summary?`Earlier chat summary:\n${CH.summary}\n\n`:'')+
+    `Recent chat:\n${context||'(no earlier messages)'}\n\n`+
+    (images?`Available chat image attachments (use view_image with the number if useful):\n${images}\n\n`:'')+
+    `Your assignment:\n${task}`}];
+}
+function spawnLiveAgent(model,task){
+  task=String(task||'').trim().slice(0,8000);
+  if(!task)return {error:'agent mode needs an initial assignment'};
+  if(CH.agents.length>=AGENT_NAMES.length)return {error:'the chat already has the maximum of four agents including Calcium'};
+  const name=AGENT_NAMES.find(n=>!CH.agents.some(a=>a.name===n));
+  if(!name)return {error:'all named agent slots are occupied'};
+  const slot=agentSpawnSlots().find(x=>x.model===model);
+  if(!slot)return {error:'no ready free node is serving the selected model'};
+  const agent={id:`agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`,name,model,node:slot.node,
+    status:'starting',task,last:'',systemPrompt:agentDefaultPrompt(name),messages:agentSeedMessages(task),inbox:[],finishRequested:false};
+  agent.messages[0].content=agentSystemText(agent);
+  CH.agents.push(agent);saveChat();renderAgents();
+  processLiveAgent(agent.id);
+  return {ok:true,name,model,node:slot.node,status:'starting'};
+}
+async function messageLiveAgent(agent,text,interrupt=false,sender='Calcium'){
+  text=String(text||'').trim().slice(0,8000);
+  if(!text)return {error:'message cannot be empty'};
+  if(!CH.agents.includes(agent))return {error:'that agent is no longer active'};
+  if(agent.inbox.length>=20)return {error:`${agent.name}'s message queue is full`};
+  const wasProcessing=agentProcessing.has(agent.id),didInterrupt=!!(interrupt&&agentRuns.has(agent.id));
+  agent.inbox.push({sender:String(sender||'Calcium').slice(0,40),text});
+  if(didInterrupt)agentRuns.get(agent.id)?.abort();
+  if(!wasProcessing)processLiveAgent(agent.id);
+  agent.status=agentProcessing.has(agent.id)?(didInterrupt?'interrupted':'working'):'queued';
+  saveChat();renderAgents();
+  return {ok:true,target:agent.name,queued:wasProcessing&&!didInterrupt,interrupted:didInterrupt};
+}
+function removeLiveAgent(agent,reason='removed by Calcium'){
+  if(!CH.agents.includes(agent))return false;
+  agentRuns.get(agent.id)?.abort();
+  CH.agents=CH.agents.filter(a=>a!==agent);
+  recordAgentMessage({role:'assistant',agentName:agent.name,content:`${agent.name} was ${reason}.`});
+  saveChat();renderAgents();renderChat();
+  return true;
+}
+function finishLiveAgent(agent,answer){
+  if(!CH.agents.includes(agent))return;
+  agentRuns.get(agent.id)?.abort();
+  CH.agents=CH.agents.filter(a=>a!==agent);
+  recordAgentMessage({role:'assistant',agentName:agent.name,node:agent.node,content:`${answer||agent.last||'Assignment complete.'}`});
+  saveChat();renderAgents();renderChat();
+}
+function recordAgentMessage(message){
+  if(chatAbort)CH.agentNotes.push(message);
+  else CH.msgs.push(message);
+}
+function messageCalcium(text,sender,interrupt=false){
+  text=String(text||'').trim().slice(0,8000);
+  if(!text)return {error:'message cannot be empty'};
+  const wasBusy=!!chatAbort;
+  recordAgentMessage({role:'user',agentName:sender,content:`Message from ${sender}:\n${text}`});
+  if(interrupt){
+    if(wasBusy){CH.agentInterrupt=true;chatAbort.abort()}
+    else setTimeout(()=>{if(!chatAbort)chatSend(true)},0);
+  }
+  saveChat();renderChat();
+  return {ok:true,target:'Calcium',queued:wasBusy&&!interrupt,interrupted:wasBusy&&interrupt};
+}
+function flushAgentMessages(){
+  if(!CH.agentNotes.length)return;
+  CH.msgs.push(...CH.agentNotes);CH.agentNotes=[];renderChat();
+}
+const agentProcessing=new Set();
+async function processLiveAgent(id){
+  const agent=CH.agents.find(a=>a.id===id);
+  if(!agent||agentProcessing.has(id))return;
+  agentProcessing.add(id);agent.status='working';renderAgents();
+  let step=0;
+  try{
+    if(!TOOLINFO)await loadTools();
+    if(!TOOLINFO){agent.status='error';agent.last='Could not load tools from the controller; retry after reconnecting.';return}
+    if(agent.messages.some(m=>m.image))await loadMsgImages();
+    while(CH.agents.includes(agent)&&step<clamp(+CH.steps||10,1,40)){
+      if(agent.inbox.length){
+        const note=agent.inbox.shift();
+        agent.messages.push({role:'user',content:`Message from ${note.sender}:\n${note.text}`});
+      }
+      agent.messages[0]={role:'system',content:agentSystemText(agent)};
+      compactAgentHistory(agent);
+      const ctl=new AbortController();agentRuns.set(id,ctl);
+      let out;
+      try{
+        out=await llmCall({messages:agentApiMessages(agent),tools:activeTools(agent.model,agent.node,agent.id),route:agent.node,model:agent.model,signal:ctl.signal});
+      }catch(e){
+            if(e.name==='AbortError'&&agent.inbox.length){continue}
+        if(e.name==='AbortError'){agent.status='waiting';agent.last='Interrupted';break}
+        agent.status='error';agent.last=e.message||String(e);break;
+      }
+      if(!CH.agents.includes(agent))return;
+      agent.node=out.node||agent.node;
+      if(out.tool_calls?.length){
+        agent.messages.push({role:'assistant',content:out.content||'',tool_calls:out.tool_calls});
+        for(let i=0;i<out.tool_calls.length;i++){
+          const tc=out.tool_calls[i];
+          if(!CH.agents.includes(agent))return;
+          const result=await runTool(tc,{agentId:agent.id,model:agent.model,node:agent.node,route:agent.node});
+          if(!CH.agents.includes(agent))return;
+          agent.messages.push({role:'tool',tool_call_id:tc.id,name:tc.function.name,content:capTool(result),...(tc.web_image?{image:tc.web_image,image_name:tc.web_image_name||'tool image'}:{})});
+          if(agentRuns.get(id)?.signal.aborted&&agent.inbox.length){
+            for(const skipped of out.tool_calls.slice(i+1))agent.messages.push({role:'tool',tool_call_id:skipped.id,name:skipped.function.name,content:JSON.stringify({error:'interrupted before this tool call ran'})});
+            break;
+          }
+        }
+        saveChat();renderAgents();step++;
+        if(agentRuns.get(id)?.signal.aborted&&agent.inbox.length)continue;
+        continue;
+      }
+      const answer=(out.content||out.reasoning||'').trim();
+      if(answer)agent.messages.push({role:'assistant',content:answer});
+      agent.last=short(answer||'No text response',160);
+      saveChat();renderAgents();step++;
+      if(agent.finishRequested){finishLiveAgent(agent,answer);return}
+      if(agent.inbox.length)continue;
+      agent.status='waiting';
+      break;
+    }
+    if(CH.agents.includes(agent)&&step>=clamp(+CH.steps||10,1,40)){
+      agent.status='waiting';agent.last=`Paused after ${step} steps; send another message to continue.`;
+    }
+  }catch(e){
+    if(CH.agents.includes(agent)){agent.status='error';agent.last=e.message||String(e)}
+  }finally{
+    if(agentRuns.has(id))agentRuns.delete(id);
+    agentProcessing.delete(id);
+    if(CH.agents.includes(agent)){
+      if(agent.status==='working'||agent.status==='starting')agent.status='waiting';
+      saveChat();renderAgents();
+      if(agent.inbox.length)processLiveAgent(id);
+    }
+  }
+}
+async function runAgentTool(name,args,context={}){
+  if(name==='spawn'){
+    const result=await spawnRun(args,context);
+    return result;
+  }
+  const active=CH.agents.find(a=>a.name===args.target);
+  if(name==='status'){
+    if(args.target==='Calcium')return JSON.stringify({agents:[{name:'Calcium',status:chatAbort?'working':'waiting',model:CH.model,node:CH.route||null}]});
+    if(!args.target&&context.agentId)return JSON.stringify({agents:[{name:'Calcium',status:chatAbort?'working':'waiting',model:CH.model,node:CH.route||null},
+      ...CH.agents.map(a=>({name:a.name,model:a.model,node:a.node,status:a.status,task:a.task,last:a.last,queued_messages:a.inbox.length}))]});
+    const agents=args.target?(active?[active]:[]):CH.agents;
+    if(args.target&&!active)return JSON.stringify({error:'no active agent named '+args.target});
+    return JSON.stringify({agents:agents.map(a=>({name:a.name,model:a.model,node:a.node,status:a.status,task:a.task,last:a.last,
+      queued_messages:a.inbox.length}))});
+  }
+  if(name==='agent_done'){
+    const agent=CH.agents.find(a=>a.id===context.agentId);
+    if(!agent)return JSON.stringify({error:'only a live agent can call agent_done'});
+    agent.finishRequested=true;
+    return JSON.stringify({ok:true,message:'You are marked as done. Give a concise final response, then your agent will leave the active roster.'});
+  }
+  if(context.agentId&&(name==='tell'||name==='interrupt')&&args.target==='Calcium'){
+    const sender=CH.agents.find(a=>a.id===context.agentId)?.name||'Agent';
+    return JSON.stringify(messageCalcium(args.message,sender,name==='interrupt'));
+  }
+  if(!active)return JSON.stringify({error:'no active agent named '+String(args.target||'')});
+  if(name==='tell'||name==='interrupt'){
+    if(context.agentId&&active.id===context.agentId)return JSON.stringify({error:'send messages to another agent, not yourself'});
+    const result=await messageLiveAgent(active,args.message,name==='interrupt',context.agentId?CH.agents.find(a=>a.id===context.agentId)?.name:'Calcium');
+    return JSON.stringify(result);
+  }
+  if(name==='despawn'){
+    if(context.agentId)return JSON.stringify({error:'agents cannot despawn other agents; use agent_done when you are finished'});
+    removeLiveAgent(active,'despawned by Calcium');
+    return JSON.stringify({ok:true,despawned:active.name});
+  }
+  return JSON.stringify({error:'unknown agent tool'});
+}
+async function spawnRun(args,context={}){
+  if(args.mode==='agent'){
+    const result=spawnLiveAgent(String(args.model||''),args.task);
+    return JSON.stringify(result);
+  }
   const model=String(args.model||''),mode=args.mode==='debate'?'debate':'parallel',slots=spawnSlots().filter(x=>x.model===model);
   if(!model||!slots.length)return JSON.stringify({error:'no ready free node is serving the selected model; choose a model from the current spawn tool list'});
-  const signal=chatAbort?.signal||new AbortController().signal,touch=()=>{};
+  const signal=(context.agentId?agentRuns.get(context.agentId)?.signal:null)||chatAbort?.signal||new AbortController().signal,touch=()=>{};
   if(mode==='parallel'){
     const prompts=(Array.isArray(args.tasks)?args.tasks:[]).map(x=>String(x||'').trim()).filter(Boolean).slice(0,4);
     if(!prompts.length)return JSON.stringify({error:'parallel mode needs one or more task prompts'});
@@ -1808,49 +2495,93 @@ function approvalText(name,a,why){
   else what='call '+name+'('+short(Object.entries(a).map(([k,v])=>k+'='+(typeof v==='string'?v:JSON.stringify(v))).join(', '),300)+')';
   return `Allow the assistant to ${what}\n\n(${why})`;
 }
+async function managedChatStream(body,route,signal,onLine){
+  const requestId=`web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,12)}`,
+    headers={'Content-Type':'application/json'};
+  if(TOKEN)headers.Authorization='Bearer '+TOKEN;
+  let run;
+  for(let attempt=0;!run;attempt++){
+    if(signal?.aborted)throw new DOMException('Aborted','AbortError');
+    try{
+      const response=await fetch('/api/chat/runs',{method:'POST',headers,body:JSON.stringify({request_id:requestId,body,target:route||''}),signal});
+      const data=await response.json().catch(()=>({}));
+      if(response.status===401){askToken();throw new Error('Unauthorized — enter the access token, then retry')}
+      if(!response.ok)throw new Error(data.error||`Could not start chat stream (HTTP ${response.status})`);
+      run=data;
+    }catch(error){
+      if(error.name==='AbortError'||signal?.aborted)throw error;
+      if(error.message?.startsWith('Could not start chat stream')||error.message?.startsWith('Unauthorized'))throw error;
+      await sleep(Math.min(5000,300*2**Math.min(attempt,4)));
+    }
+  }
+  let cursor=0,node=run.node||'';
+  for(let attempt=0;;){
+    if(signal?.aborted){
+      fetch(`/api/chat/runs/${encodeURIComponent(run.id)}`,{method:'DELETE',headers}).catch(()=>{});
+      throw new DOMException('Aborted','AbortError');
+    }
+    let response,data;
+    try{
+      response=await fetch(`/api/chat/runs/${encodeURIComponent(run.id)}?after=${cursor}&wait=15`,{headers,signal});
+      if(response.status===401){askToken();throw new Error('Unauthorized — enter the access token, then retry')}
+      if(!response.ok){
+        const detail=await response.json().catch(()=>({}));
+        throw new Error(detail.error||`Could not resume chat stream (HTTP ${response.status})`);
+      }
+      data=await response.json();attempt=0;
+    }catch(error){
+      if(error.name==='AbortError'||signal?.aborted){
+        fetch(`/api/chat/runs/${encodeURIComponent(run.id)}`,{method:'DELETE',headers}).catch(()=>{});
+        throw error;
+      }
+      if(error.message?.startsWith('Could not resume chat stream')||error.message?.startsWith('Unauthorized'))throw error;
+      await sleep(Math.min(10000,500*2**Math.min(attempt++,4)));
+      continue;
+    }
+    node=data.node||node;
+    try{(data.lines||[]).forEach(onLine)}
+    catch(error){
+      fetch(`/api/chat/runs/${encodeURIComponent(run.id)}`,{method:'DELETE',headers}).catch(()=>{});
+      throw error;
+    }
+    cursor=data.next;
+    if(data.error)throw new Error(data.error);
+    if(data.done)return {node,runId:run.id};
+  }
+}
 async function streamOnce(signal,opts={}){
   const a={role:'assistant',content:'',reasoning:'',streaming:true};CH.msgs.push(a);renderChat();
-  const tl=opts.noTools?[]:activeTools();
-  const body={stream:true,stream_options:{include_usage:true},messages:apiMessages(opts.extraUser),temperature:+CH.temp};
+  const mdl=opts.model??CH.model,rt=opts.route??CH.route;
+  const tl=opts.noTools?[]:activeTools(mdl,rt);
+  const body={stream:true,stream_options:{include_usage:true},messages:apiMessages(opts.extraUser,false,mdl,rt),temperature:+CH.temp};
   if(tl.length)body.tools=tl;
   const est=ctxEstimate(body.messages,body.tools);
-  const mdl=opts.model??CH.model,rt=opts.route??CH.route;
   if(mdl)body.model=mdl;
   addEffort(body,mdl,rt);
   if(CH.max)body.max_tokens=+CH.max;
   const tcs=[];let chunks=0,tFirst=null,ptok=0;
   try{
-    const h={'Content-Type':'application/json'};if(TOKEN)h.Authorization='Bearer '+TOKEN;if(rt)h['X-LlamaCluster-Target']=rt;
-    const r=await fetch('/v1/chat/completions',{method:'POST',headers:h,body:JSON.stringify(body),signal});
-    if(r.status===401){askToken();throw new Error('Unauthorized — enter the access token, then press ↻ to retry')}
-    if(!r.ok){const d=await r.json().catch(()=>({}));let msg=d.error?.message||d.error||('HTTP '+r.status);
-      if(/jinja|tools?/i.test(msg)&&tl.length)msg+='  — tool calling needs a model with tool support and a llama-server started with --jinja (restart the node from this UI to get it), or switch tools off under 🗂 Workspace.';
-      throw new Error(msg)}
-    a.node=r.headers.get('X-LlamaCluster-Node')||'';
-    const rd=r.body.getReader(),dec=new TextDecoder();let buf='';
-    for(;;){
-      const {done,value}=await rd.read();if(done)break;
-      buf+=dec.decode(value,{stream:true});
-      let i;while((i=buf.indexOf('\n'))>=0){
-        const line=buf.slice(0,i).trim();buf=buf.slice(i+1);
-        if(!line.startsWith('data:'))continue;const p=line.slice(5).trim();if(!p||p==='[DONE]')continue;
-        let j;try{j=JSON.parse(p)}catch(e){continue}
-        if(j.error)throw new Error(j.error.message||JSON.stringify(j.error));
-        if(j.usage?.prompt_tokens)ptok=j.usage.prompt_tokens;
-        const d=j.choices?.[0]?.delta||{};
-        if(d.reasoning_content)a.reasoning+=d.reasoning_content;
-        if(d.content)a.content+=d.content;
-        (d.tool_calls||[]).forEach(t=>{
-          const k=t.index??0,c=tcs[k]=tcs[k]||{id:'',type:'function',function:{name:'',arguments:''}};
-          if(t.id)c.id=t.id;if(t.function?.name)c.function.name=t.function.name;
-          if(t.function?.arguments)c.function.arguments+=t.function.arguments;
-          a.tool_calls=tcs.filter(Boolean);
-        });
-        if(d.content||d.reasoning_content||d.tool_calls){chunks++;if(tFirst==null)tFirst=performance.now()}
-        if(j.timings?.predicted_per_second)a.tps=j.timings.predicted_per_second;
-      }
+    const stream=await managedChatStream(body,rt,signal,line=>{
+      const trimmed=line.trim();
+      if(!trimmed.startsWith('data:'))return;
+      const p=trimmed.slice(5).trim();if(!p||p==='[DONE]')return;
+      let j;try{j=JSON.parse(p)}catch(e){return}
+      if(j.error)throw new Error(j.error.message||JSON.stringify(j.error));
+      if(j.usage?.prompt_tokens)ptok=j.usage.prompt_tokens;
+      const d=j.choices?.[0]?.delta||{};
+      if(d.reasoning_content)a.reasoning+=d.reasoning_content;
+      if(d.content)a.content+=d.content;
+      (d.tool_calls||[]).forEach(t=>{
+        const k=t.index??0,c=tcs[k]=tcs[k]||{id:'',type:'function',function:{name:'',arguments:''}};
+        if(t.id)c.id=t.id;if(t.function?.name)c.function.name=t.function.name;
+        if(t.function?.arguments)c.function.arguments+=t.function.arguments;
+        a.tool_calls=tcs.filter(Boolean);
+      });
+      if(d.content||d.reasoning_content||d.tool_calls){chunks++;if(tFirst==null)tFirst=performance.now()}
+      if(j.timings?.predicted_per_second)a.tps=j.timings.predicted_per_second;
       updateLast();
-    }
+    });
+    a.node=stream.node||'';
   }catch(e){if(e.name==='AbortError')a.stopped=true;else a.error=e.message}
   finally{
     delete a.streaming;
@@ -1889,7 +2620,7 @@ async function agentLoop(sig,opts={}){
       if(sig.aborted)break;
       const content=await runTool(tc);
       if(sig.cleared)break;
-      CH.msgs.push({role:'tool',tool_call_id:tc.id,name:tc.function.name,args:tc.function.arguments,content:capTool(content,opts.toolTok),...(tc.web_image?{image:tc.web_image}:{})});
+      CH.msgs.push({role:'tool',tool_call_id:tc.id,name:tc.function.name,args:tc.function.arguments,content:capTool(content,opts.toolTok),...(tc.web_image?{image:tc.web_image,image_name:tc.web_image_name||'tool image'}:{})});
       renderChat();
     }
     if(sig.aborted){status='stopped';break}
@@ -1897,13 +2628,44 @@ async function agentLoop(sig,opts={}){
   }
   return status;
 }
+function renderChatQueue(){
+  const box=$('#cQueue');if(!box)return;
+  const queue=CH.queue||[];
+  box.hidden=!queue.length;
+  box.innerHTML=queue.length?`Queue (${queue.length}) · Ctrl+Enter adds a message${queue.map((m,i)=>`<div class="row"><span>${esc(short(m.text||'Image attachment',100))}${m.images?.length?` · ${m.images.length} image${m.images.length===1?'':'s'}`:''}</span><button class="small" title="Remove from queue" onclick="dropQueuedMessage(${i})">✕</button></div>`).join('')}`:'';
+}
+function dropQueuedMessage(index){CH.queue.splice(index,1);renderChatQueue();saveChat()}
+function queueChatMessage(){
+  const text=$('#cIn').value.trim(),images=[...PEND];
+  if(!text&&!images.length)return;
+  if(CH.queue.length>=50){alert('The message queue is full (50 messages).');return}
+  CH.queue.push({text,images});
+  PEND=[];renderPend();$('#cIn').value='';grow();slashUi();renderChatQueue();saveChat();
+  if(!chatAbort)dispatchQueuedMessage();
+}
+function dispatchQueuedMessage(){
+  if(chatAbort||!CH.queue.length)return;
+  const next=CH.queue[0];
+  if(next.images?.length&&!capsNow().vision){
+    alert('A queued message contains images, but the selected model cannot read images. Select a multimodal model before sending the queue.');
+    return;
+  }
+  CH.queue.shift();
+  CH.msgs.push({role:'user',content:next.text||'',...(next.images?.length?{images:next.images}:{})});
+  renderChatQueue();saveChat();chatSend(true);
+}
 async function chatSend(regen){
+  if(!regen){
+    const text=$('#cIn').value.trim(),command=/^\/(compact|clear|models|read|view|schedule)(?:\s+([\s\S]*))?$/i.exec(text);
+    if(command&&(!chatAbort||['models','read','view','schedule'].includes(command[1].toLowerCase()))){
+      if(dispatchBtw(text))return;
+      $('#cIn').value='';grow();slashUi();await runSlash(command[1].toLowerCase(),(command[2]||'').trim());return;
+    }
+  }
   if(chatAbort){if(!regen&&dispatchBtw($('#cIn').value.trim()))return;chatAbort.abort();return}          // /btw uses a parallel request; Send otherwise doubles as Stop
   if(!regen){
     const t=$('#cIn').value.trim();if(!t&&!PEND.length)return;
     if(dispatchBtw(t))return;
-    const sc=/^\/(compact|clear)(?:\s+([\s\S]*))?$/i.exec(t);
-    if(sc){$('#cIn').value='';grow();slashUi();await runSlash(sc[1].toLowerCase(),(sc[2]||'').trim());return}
     if(PEND.length&&!capsNow().vision){alert('The selected model can\'t read images — remove the picture(s) or pick a vision model.');return}
     const pm=planMsg();if(pm)pm.plan='revised';     // typing instead of clicking = feedback on the pending plan
     CH.msgs.push({role:'user',content:t,...(PEND.length?{images:PEND}:{})});PEND=[];renderPend();$('#cIn').value='';grow();
@@ -1919,7 +2681,10 @@ async function chatSend(regen){
     else await agentLoop(ctl.signal);
   }finally{
     if(ctl.cleared)wipeChat();else repairHistory();
-    chatAbort=null;$('#cSend').textContent='Send';syncBusy();saveChat();renderChat();
+    chatAbort=null;flushAgentMessages();const resume=CH.agentInterrupt;CH.agentInterrupt=false;
+    $('#cSend').textContent='Send';syncBusy();saveChat();renderChat();
+    if(resume)setTimeout(()=>{if(!chatAbort)chatSend(true)},0);
+    else if(CH.queue.length)setTimeout(dispatchQueuedMessage,0);
   }
 }
 
@@ -1958,19 +2723,25 @@ function setPerm(v){
 $('#cPerm').value=$('#wPerm').value=CH.perm;
 $('#cPerm').onchange=()=>setPerm($('#cPerm').value);$('#wPerm').onchange=()=>setPerm($('#wPerm').value);
 $('#cSub').oninput=()=>{CH.maxSub=clamp(+$('#cSub').value||4,1,12);saveChat()};
-function toolNotes(){
-  const names=activeTools().map(t=>t.function.name),L=[];
+function toolNotes(model=CH.model,route=CH.route,agentId=null){
+  const names=activeTools(model,route,agentId).map(t=>t.function.name),L=[];
   if(names.includes('calculate'))L.push('- calculate: an exact, safe calculator. Use it for any non-trivial arithmetic or maths (big numbers, fractions, matrices, statistics, primes, integrals, derivatives, solving equations) instead of working it out in your head, and report what it returns.');
   if(names.includes('convert_units'))L.push('- convert_units: converts between units (length, mass, temperature, data size ...).');
   if(names.includes('question'))L.push('- question: ask the user a question when you need a decision or information you cannot find yourself. Give 2-6 short options when there are sensible choices (the user can also type their own answer). Ask one question at a time and never ask what you can look up or decide yourself.');
   if(names.includes('task'))L.push('- task: a visible to-do list for the user. For work with several steps, add the tasks first (action add), set a task to doing when you start it and to done when it is finished (action set), and remove tasks that no longer apply (action remove).'+(CH.tasks?.length?'\n  Current tasks:\n'+CH.tasks.map(t=>`  #${t.id} [${t.status}] ${t.title}`).join('\n'):''));
   if(names.includes('date_time'))L.push('- date_time: the current time in any time zone, time zone conversion and date arithmetic.');
-  if(names.includes('spawn'))L.push('- spawn: consider delegating independent work or a debate when another model would improve the answer. Select a ready model from the tool schema and choose parallel tasks or debate rounds; use the results in your final answer. Available models: '+[...new Set(spawnSlots().map(x=>x.model))].join(', ')+'.');
+  if(names.includes('spawn'))L.push('- spawn: use mode "agent" to bring a persistent, named model into this chat; give it a clear initial task. Use mode "parallel" for independent one-shot tasks or "debate" for one-shot critique rounds. Select a model from the tool schema.');
+  if(names.includes('tell'))L.push('- tell: send a non-interrupting message to Calcium or another live agent; it waits until a busy recipient finishes its current reply.');
+  if(names.includes('interrupt'))L.push('- interrupt: stop a live agent reply and redirect it immediately. You may also interrupt Calcium; it will receive your message and restart on it.');
+  if(names.includes('status'))L.push('- status: read agent state without sending a message or interrupting its work.');
+  if(names.includes('despawn'))L.push('- despawn: remove a live agent that is no longer needed.');
+  if(names.includes('agent_done'))L.push('- agent_done: call this when you consider your own assignment complete; then give a concise final response.');
   if(names.includes('runweb'))L.push('- runweb: use after building or changing a web page to execute its HTML, inspect browser console errors, and review the screenshot when available.');
   if(names.includes('playwright'))L.push('- playwright: use Playwright on the currently open saved HTML file '+(wsOpenPath?'('+wsOpenPath+')':'')+' to inspect console errors and its screenshot after web changes.');
+  if(names.includes('view_image'))L.push('- view_image: inspect a workspace image by path, or a previous chat attachment using its listed 1-based attachment number. Use this when you need to examine image contents; the image itself is sent to you.');
   return L.length?'\n\nExtra tools you can use:\n'+L.join('\n'):'';
 }
-function sysText(){return ((CH.sys2||'').replace(/\{\{date\}\}/g,new Date().toString()).replace(/\{\{workspace\}\}/g,TOOLINFO?.workspace||'the workspace').trim()+toolNotes()).trim()}
+function sysText(model=CH.model,route=CH.route){return ((CH.sys2||'').replace(/\{\{date\}\}/g,new Date().toString()).replace(/\{\{workspace\}\}/g,TOOLINFO?.workspace||'the workspace').trim()+toolNotes(model,route)).trim()}
 function lastUserText(){for(let i=CH.msgs.length-1;i>=0;i--)if(CH.msgs[i].role==='user'&&!CH.msgs[i].auto)return CH.msgs[i].content;return ''}
 
 
@@ -2075,27 +2846,22 @@ async function llmCall({messages,tools,route,model,signal,json,max,think}){
   if(tools?.length)body.tools=tools;if(model)body.model=model;if(max||CH.max)body.max_tokens=+(max||CH.max);
   if(json)body.response_format={type:'json_object'};
   addEffort(body,model,route,think===false);
-  const h={'Content-Type':'application/json'};if(TOKEN)h.Authorization='Bearer '+TOKEN;if(route)h['X-LlamaCluster-Target']=route;
-  const r=await fetch('/v1/chat/completions',{method:'POST',headers:h,body:JSON.stringify(body),signal});
-  if(r.status===401){askToken();throw new Error('Unauthorized — enter the access token and retry')}
-  if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error?.message||d.error||('HTTP '+r.status))}
-  const out={content:'',reasoning:'',tool_calls:[],node:r.headers.get('X-LlamaCluster-Node')||'',tps:0};
-  const tcs=[],rd=r.body.getReader(),dec=new TextDecoder();let buf='',chunks=0,t0=null;
-  for(;;){
-    const {done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});
-    let i;while((i=buf.indexOf('\n'))>=0){
-      const line=buf.slice(0,i).trim();buf=buf.slice(i+1);
-      if(!line.startsWith('data:'))continue;const p=line.slice(5).trim();if(!p||p==='[DONE]')continue;
-      let j;try{j=JSON.parse(p)}catch(e){continue}
-      if(j.error)throw new Error(j.error.message||JSON.stringify(j.error));
-      const d=j.choices?.[0]?.delta||{};
-      if(d.content)out.content+=d.content;if(d.reasoning_content)out.reasoning+=d.reasoning_content;
-      (d.tool_calls||[]).forEach(t=>{const k=t.index??0,c=tcs[k]=tcs[k]||{id:'',type:'function',function:{name:'',arguments:''}};
-        if(t.id)c.id=t.id;if(t.function?.name)c.function.name=t.function.name;if(t.function?.arguments)c.function.arguments+=t.function.arguments});
-      if(d.content||d.tool_calls){chunks++;if(t0==null)t0=performance.now()}
-      if(j.timings?.predicted_per_second)out.tps=j.timings.predicted_per_second;
-    }
-  }
+  const out={content:'',reasoning:'',tool_calls:[],node:'',tps:0};
+  const tcs=[];let chunks=0,t0=null;
+  const stream=await managedChatStream(body,route,signal,line=>{
+    const trimmed=line.trim();
+    if(!trimmed.startsWith('data:'))return;
+    const p=trimmed.slice(5).trim();if(!p||p==='[DONE]')return;
+    let j;try{j=JSON.parse(p)}catch(e){return}
+    if(j.error)throw new Error(j.error.message||JSON.stringify(j.error));
+    const d=j.choices?.[0]?.delta||{};
+    if(d.content)out.content+=d.content;if(d.reasoning_content)out.reasoning+=d.reasoning_content;
+    (d.tool_calls||[]).forEach(t=>{const k=t.index??0,c=tcs[k]=tcs[k]||{id:'',type:'function',function:{name:'',arguments:''}};
+      if(t.id)c.id=t.id;if(t.function?.name)c.function.name=t.function.name;if(t.function?.arguments)c.function.arguments+=t.function.arguments});
+    if(d.content||d.tool_calls){chunks++;if(t0==null)t0=performance.now()}
+    if(j.timings?.predicted_per_second)out.tps=j.timings.predicted_per_second;
+  });
+  out.node=stream.node||'';
   out.tool_calls=tcs.filter(c=>c&&c.function.name);
   out.tool_calls.forEach((c,i)=>{if(!c.id)c.id='call_'+Date.now().toString(36)+i;if(!c.function.arguments)c.function.arguments='{}'});
   if(!out.tps&&t0&&chunks>1)out.tps=(chunks-1)/((performance.now()-t0)/1000);
@@ -2119,11 +2885,11 @@ function nodeOrder(){   // distinct nodes first (fastest first), then extra slot
 async function runWorker(t,node,sig,touch,model,options={}){
   if(model===undefined)model=CH.model;
   t.status='running';t.node=node;touch();
-  const msgs=[{role:'system',content:sysText()+WORKER_NOTE},{role:'user',content:t.fullPrompt||t.prompt}],max=clamp(+CH.steps||10,1,40);
+  const msgs=[{role:'system',content:sysText(model,node)+WORKER_NOTE},{role:'user',content:t.fullPrompt||t.prompt}],max=clamp(+CH.steps||10,1,40);
   try{
     for(let step=0;step<max;step++){
       let a;
-      const toolsForWorker=activeTools().filter(x=>!options.noSpawn||x.function.name!=='spawn');
+      const toolsForWorker=activeTools(model,node).filter(x=>!options.noSpawn||x.function.name!=='spawn');
       try{a=await llmCall({messages:msgs,tools:toolsForWorker,route:node,model,signal:sig})}
       catch(e){if(e.name==='AbortError'||!node)throw e;node='';a=await llmCall({messages:msgs,tools:toolsForWorker,route:'',model,signal:sig})}   // pinned node vanished -> any node
       t.node=a.node||node;if(a.tps)t.tps=a.tps;
@@ -2439,7 +3205,8 @@ const cardEl=id=>document.querySelector(`.card[data-id="${id}"]`);
 function applyCfgToForm(id,cfg,nosave){
   const s=settingsCache[id]=settingsCache[id]||{};Object.assign(s,cfg);if(!nosave&&s.model)saveModelCfg(id);
   const el=cardEl(id);if(!el)return;
-  for(const [k,v] of Object.entries(cfg)){const i=el.querySelector(`[data-f="${k}"]`);if(i)i.value=v??''}
+  for(const [k,v] of Object.entries(cfg)){const i=el.querySelector(`[data-f="${k}"]`);if(i){if(i.type==='checkbox')i.checked=!!v;else i.value=v??''}}
+  imageInputSync(id);
 }
 // ---- Maximise node
 function maxNode(id){

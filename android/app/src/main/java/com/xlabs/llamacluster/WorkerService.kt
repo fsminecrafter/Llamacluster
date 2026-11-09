@@ -49,6 +49,7 @@ class WorkerService : Service() {
         val token = p.getString("token", "") ?: ""
         val hf = p.getString("hf", "") ?: ""
         val modelsDir = (getExternalFilesDir(null) ?: filesDir).absolutePath + "/models"
+        val storageRoots = getExternalFilesDirs(null).filterNotNull().map { it.absolutePath }.toTypedArray()
         val device = ((Build.MANUFACTURER ?: "") + " " + (Build.MODEL ?: "")).trim()
         val nativeDir = applicationInfo.nativeLibraryDir
 
@@ -61,7 +62,7 @@ class WorkerService : Service() {
             try {
                 if (!Python.isStarted()) Python.start(AndroidPlatform(applicationContext))
                 Python.getInstance().getModule("android_main")
-                    .callAttr("run", name, token, modelsDir, nativeDir, port.toInt(), device, hf)
+                    .callAttr("run", name, token, modelsDir, nativeDir, port.toInt(), device, hf, storageRoots)
             } catch (t: Throwable) {
                 lastError = t.message ?: t.toString()
             } finally {

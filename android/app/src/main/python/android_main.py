@@ -6,7 +6,7 @@ import os
 import worker
 
 
-def run(name, token, models_dir, native_dir, port, device, hf_token=""):
+def run(name, token, models_dir, native_dir, port, device, hf_token="", storage_roots=None):
     """Blocks until stop() is called."""
     os.environ["LLAMACLUSTER_NATIVE_DIR"] = native_dir      # where lib llama-server / rpc-server live
     os.environ["LLAMACLUSTER_DEVICE"] = device
@@ -16,7 +16,8 @@ def run(name, token, models_dir, native_dir, port, device, hf_token=""):
     worker.kill_orphans(native_dir)                         # leftovers from a previous crash of the app
     args = argparse.Namespace(host="0.0.0.0", port=int(port), token=token, name=name,
                               models_dir=models_dir, llama_server="", rpc_server="",
-                              llama_port=8080, rpc_port=50052)
+                              llama_port=8080, rpc_port=50052,
+                              storage_roots=list(storage_roots or []))
     worker.serve(args, install_signals=False)               # signal handlers only work on the main thread
 
 

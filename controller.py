@@ -16,11 +16,14 @@ Pure standard library. Python 3.8+.
 import argparse
 import base64
 import concurrent.futures
+import codecs
 import http.client
 import ipaddress
 import json
+import math
 import mimetypes
 import os
+import re
 import secrets
 import socket
 import tempfile
@@ -45,6 +48,342 @@ last_used = {}  # id -> ts of last routed request
 CTRL_TOKEN = ""
 TOKEN_AUTO = False      # True when the token was generated for us (then the computer itself may skip typing it)
 PORT = 7870
+CHAT_RUN_TTL = 1800
+CHAT_RUN_LIMIT = 48
+CHAT_RUN_MAX_BYTES = 16 * 1024 * 1024
+chat_runs = {}
+chat_run_keys = {}
+chat_runs_lock = threading.Lock()
+scheduled_tasks = {}
+scheduled_tasks_lock = threading.Lock()
+
+
+class ChatRun:
+    def __init__(self, run_id, request_id):
+        self.id = run_id
+        self.request_id = request_id
+        self.created = time.time()
+        self.updated = self.created
+        self.node = ""
+        self.lines = []
+        self.byte_count = 0
+        self.done = False
+        self.error = None
+        self.cancelled = False
+        self.connection = None
+        self.condition = threading.Condition()
+
+    def append(self, line):
+        raw_size = len(line.encode("utf8"))
+        with self.condition:
+            if self.byte_count + raw_size > CHAT_RUN_MAX_BYTES:
+                self.error = "chat stream exceeded the controller's 16 MiB replay buffer"
+                self.done = True
+                self.cancelled = True
+                if self.connection:
+                    self.connection.close()
+                self.condition.notify_all()
+                return False
+            self.lines.append(line)
+            self.byte_count += raw_size
+            self.updated = time.time()
+            self.condition.notify_all()
+            return True
+
+    def snapshot(self, after, wait=15):
+        deadline = time.monotonic() + min(20, max(0, wait))
+        with self.condition:
+            while after >= len(self.lines) and not self.done:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                self.condition.wait(remaining)
+            end = min(len(self.lines), after + 2048)
+            return {"id": self.id, "node": self.node, "lines": self.lines[after:end],
+                    "next": end, "done": self.done, "error": self.error,
+                    "cancelled": self.cancelled}
+
+    def cancel(self):
+        with self.condition:
+            self.cancelled = True
+            self.done = True
+            self.updated = time.time()
+            if self.connection:
+                self.connection.close()
+            self.condition.notify_all()
+
+
+def _chat_run_worker(run, body, candidates):
+    last_error = "no candidate node"
+    for node in candidates:
+        if run.cancelled:
+            break
+        inflight[node["id"]] = inflight.get(node["id"], 0) + 1
+        c = None
+        try:
+            c, prefix = conn_for(node["url"], 600)
+            with run.condition:
+                run.connection = c
+            hdrs = {"Content-Type": "application/json"}
+            if node.get("token"):
+                hdrs["Authorization"] = "Bearer " + node["token"]
+            c.request("POST", prefix + "/v1/chat/completions",
+                      body=json.dumps(body).encode("utf8"), headers=hdrs)
+            response = c.getresponse()
+            if response.status >= 500:
+                last_error = f"{node['name']}: HTTP {response.status} " + response.read()[:300].decode("utf8", "replace")
+                c.close()
+                continue
+            if response.status != 200:
+                detail = response.read()[:2000].decode("utf8", "replace")
+                try:
+                    detail = json.loads(detail).get("error", {}).get("message", detail)
+                except (ValueError, AttributeError):
+                    pass
+                run.error = f"{node['name']}: HTTP {response.status} {detail}"
+                break
+            run.node = node["name"]
+            decoder = codecs.getincrementaldecoder("utf8")("replace")
+            saw_done = False
+            while not run.cancelled:
+                raw = response.readline()
+                if not raw:
+                    break
+                line = decoder.decode(raw)
+                if line.startswith("data:") and line.strip() == "data: [DONE]":
+                    saw_done = True
+                if not run.append(line):
+                    break
+            if not run.cancelled and not run.error and not saw_done:
+                run.error = f"{node['name']}: model stream ended before [DONE]"
+            break
+        except Exception as e:
+            if not run.cancelled:
+                last_error = f"{node['name']}: {type(e).__name__}: {e}"
+        finally:
+            if c:
+                c.close()
+            with run.condition:
+                if run.connection is c:
+                    run.connection = None
+            inflight[node["id"]] = max(0, inflight.get(node["id"], 1) - 1)
+    with run.condition:
+        if not run.cancelled and run.error is None and not run.node:
+            run.error = "all nodes failed: " + last_error
+        run.done = True
+        run.updated = time.time()
+        run.condition.notify_all()
+
+
+def create_chat_run(request_id, body, target=""):
+    now = time.time()
+    with chat_runs_lock:
+        expired = [rid for rid, run in chat_runs.items() if run.done and now - run.updated > CHAT_RUN_TTL]
+        for rid in expired:
+            old = chat_runs.pop(rid)
+            chat_run_keys.pop(old.request_id, None)
+        existing_id = chat_run_keys.get(request_id)
+        if existing_id and existing_id in chat_runs:
+            return chat_runs[existing_id]
+        active = sum(not run.done for run in chat_runs.values())
+        if active >= CHAT_RUN_LIMIT:
+            raise RuntimeError("too many active chat streams; try again shortly")
+        try:
+            hint = body.get("model")
+        except AttributeError:
+            raise ValueError("body must be a JSON object")
+        if not isinstance(body, dict) or not body.get("stream"):
+            raise ValueError("body must be a streaming chat completion request")
+        if target:
+            pool = [n for n in ready_nodes() if target in (n["id"], n["name"])]
+        else:
+            pool = ready_nodes(hint)
+        candidates = pick_order(pool)[:3] if pool else []
+        if not candidates:
+            raise LookupError("no ready node" + (" named " + target if target else "") + " - start a model on at least one node")
+        run = ChatRun(uuid.uuid4().hex, request_id)
+        chat_runs[run.id] = run
+        chat_run_keys[request_id] = run.id
+        thread = threading.Thread(target=_chat_run_worker, args=(run, body, candidates), daemon=True,
+                                  name="chat-stream-" + run.id[:8])
+        thread.start()
+        return run
+
+
+def get_chat_run(run_id):
+    with chat_runs_lock:
+        return chat_runs.get(run_id)
+
+
+def _scheduled_tasks_file():
+    return os.path.abspath(STATE_FILE) + ".scheduled.json"
+
+
+def _save_scheduled_tasks_locked():
+    path = _scheduled_tasks_file()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf8") as f:
+        json.dump(list(scheduled_tasks.values()), f, indent=2)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+
+
+def load_scheduled_tasks():
+    try:
+        with open(_scheduled_tasks_file(), encoding="utf8") as f:
+            tasks = json.load(f)
+        if not isinstance(tasks, list):
+            raise ValueError("scheduled task state must be a list")
+        with scheduled_tasks_lock:
+            scheduled_tasks.clear()
+            for task in tasks:
+                if not isinstance(task, dict) or not task.get("id") or not task.get("prompt"):
+                    continue
+                try:
+                    task["due_at"] = float(task["due_at"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if not math.isfinite(task["due_at"]):
+                    continue
+                if task.get("status") not in ("scheduled", "running", "completed", "failed", "cancelled"):
+                    continue
+                if task.get("status") == "running":
+                    task["status"] = "scheduled"
+                    task["run_id"] = ""
+                scheduled_tasks[task["id"]] = task
+            _save_scheduled_tasks_locked()
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        print("[controller] could not read scheduled tasks", e)
+
+
+def create_scheduled_task(prompt, due_at, model="", target="", system_prompt=""):
+    prompt = str(prompt or "").strip()
+    try:
+        due_at = float(due_at)
+    except (TypeError, ValueError):
+        raise ValueError("due_at must be a Unix timestamp")
+    if not prompt or len(prompt) > 4000:
+        raise ValueError("prompt is required and must be at most 4000 characters")
+    if not (time.time() < due_at <= time.time() + 5 * 366 * 86400):
+        raise ValueError("scheduled time must be in the future and within five years")
+    task = {
+        "id": uuid.uuid4().hex[:12], "prompt": prompt, "due_at": due_at,
+        "model": str(model or "")[:300], "target": str(target or "")[:200],
+        "system_prompt": str(system_prompt or "")[:12000],
+        "status": "scheduled", "created_at": time.time(), "result": "", "error": "",
+        "started_at": None, "completed_at": None, "run_id": "",
+    }
+    with scheduled_tasks_lock:
+        if sum(t.get("status") in ("scheduled", "running") for t in scheduled_tasks.values()) >= 100:
+            raise RuntimeError("at most 100 scheduled tasks may be active")
+        scheduled_tasks[task["id"]] = task
+        _save_scheduled_tasks_locked()
+    return dict(task)
+
+
+def list_scheduled_tasks():
+    with scheduled_tasks_lock:
+        return sorted((dict(task) for task in scheduled_tasks.values()),
+                      key=lambda task: (task.get("due_at") or 0, task["id"]))
+
+
+def cancel_scheduled_task(task_id):
+    with scheduled_tasks_lock:
+        task = scheduled_tasks.get(task_id)
+        if not task:
+            return False
+        if task.get("status") in ("scheduled", "running"):
+            task["status"] = "cancelled"
+            task["completed_at"] = time.time()
+            run_id = task.get("run_id")
+            _save_scheduled_tasks_locked()
+        else:
+            run_id = ""
+    if run_id:
+        run = get_chat_run(run_id)
+        if run:
+            run.cancel()
+    return True
+
+
+def _scheduled_task_worker(task_id):
+    with scheduled_tasks_lock:
+        task = scheduled_tasks.get(task_id)
+        if not task or task.get("status") != "running":
+            return
+        task = dict(task)
+    body = {"stream": True, "model": task.get("model") or None, "messages": [
+        {"role": "system", "content": (task.get("system_prompt") or
+          "You are completing a scheduled task. Respond to the task directly. Chat tools are unavailable in scheduled runs.")},
+        {"role": "user", "content": task["prompt"]},
+    ]}
+    try:
+        run = create_chat_run("scheduled-" + task_id, body, task.get("target") or "")
+        with scheduled_tasks_lock:
+            current = scheduled_tasks.get(task_id)
+            if not current or current.get("status") != "running":
+                run.cancel()
+                return
+            current["run_id"] = run.id
+            _save_scheduled_tasks_locked()
+        cursor = 0
+        content, reasoning = [], []
+        while True:
+            page = run.snapshot(cursor, 15)
+            cursor = page["next"]
+            for line in page["lines"]:
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if not data or data == "[DONE]":
+                    continue
+                try:
+                    event = json.loads(data)
+                except ValueError:
+                    continue
+                delta = (event.get("choices") or [{}])[0].get("delta") or {}
+                if delta.get("content"):
+                    content.append(delta["content"])
+                if delta.get("reasoning_content"):
+                    reasoning.append(delta["reasoning_content"])
+            if page["done"]:
+                if page["error"]:
+                    raise RuntimeError(page["error"])
+                break
+        result = "".join(content).strip() or "".join(reasoning).strip()
+        if not result:
+            raise RuntimeError("the model returned no text")
+        if len(result) > 30000:
+            result = result[:30000] + "\n[scheduled result truncated]"
+        status_value, error = "completed", ""
+    except Exception as e:
+        result, error, status_value = "", f"{type(e).__name__}: {e}", "failed"
+    with scheduled_tasks_lock:
+        current = scheduled_tasks.get(task_id)
+        if current and current.get("status") == "running":
+            current.update(status=status_value, result=result, error=error,
+                           completed_at=time.time(), run_id="")
+            _save_scheduled_tasks_locked()
+
+
+def scheduled_task_loop():
+    while True:
+        now = time.time()
+        due = []
+        with scheduled_tasks_lock:
+            for task in scheduled_tasks.values():
+                if task.get("status") == "scheduled" and task.get("due_at", now + 1) <= now:
+                    task.update(status="running", started_at=now)
+                    due.append(task["id"])
+            if due:
+                _save_scheduled_tasks_locked()
+        for task_id in due:
+            threading.Thread(target=_scheduled_task_worker, args=(task_id,), daemon=True,
+                             name="scheduled-task-" + task_id).start()
+        time.sleep(1)
 
 
 # ----------------------------------------------------------------- storage
@@ -122,6 +461,58 @@ def node_view(n):
         "online": bool(s.get("ok")), "error": s.get("error"),
         "info": s.get("data"), "gateway_inflight": inflight.get(n["id"], 0),
     }
+
+
+def cluster_worker_action(action, body):
+    endpoints = {
+        "install": ("/api/service/install", 30),
+        "uninstall": ("/api/service/uninstall", 30),
+        "restart": ("/api/service/restart", 30),
+        "update": ("/api/update", 360),
+    }
+    if action not in endpoints:
+        raise ValueError("unknown worker action")
+    endpoint, timeout = endpoints[action]
+    token = str(body.get("token") or "")
+    if action == "install" and not re.fullmatch(r"[A-Za-z0-9._~+/=-]{12,256}", token):
+        raise ValueError("worker token must be 12-256 characters using letters, numbers, . _ ~ + / = or -")
+    controller_node = str(body.get("controller_node") or "")
+    controller_is_worker = body.get("controller_is_worker") is True
+    with lock:
+        snapshot = [dict(node) for node in nodes.values()]
+        host_status = {nid: status.get(nid, {}).get("data") or {} for nid in nodes}
+
+    def apply(node):
+        if controller_node == node["id"] and not controller_is_worker:
+            return {"node": node["name"], "status": "skipped",
+                    "message": "controller host excluded (not configured as a worker)"}
+        if action in ("install", "uninstall"):
+            os_name = host_status.get(node["id"], {}).get("os")
+            if os_name != "Linux":
+                return {"node": node["name"], "status": "skipped",
+                        "message": "Linux could not be verified; refresh node status before managing its service"}
+        request = {"token": token} if action == "install" else {}
+        try:
+            code, result = call_node(node, "POST", endpoint, request, timeout=timeout)
+            ok = 200 <= code < 300 and result.get("ok", True)
+            if ok and action == "install":
+                with lock:
+                    current = nodes.get(node["id"])
+                    if current:
+                        current["token"] = token
+            return {"node": node["name"], "status": "success" if ok else "failed",
+                    "http_status": code, "message": result.get("message") or result.get("error") or
+                    ("worker action accepted" if ok else "worker rejected the request")}
+        except Exception as e:
+            return {"node": node["name"], "status": "failed",
+                    "message": f"{type(e).__name__}: {e}"}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(16, max(1, len(snapshot)))) as pool:
+        results = list(pool.map(apply, snapshot))
+    if action == "install" and any(result["status"] == "success" for result in results):
+        with lock:
+            save()
+    return {"results": results}
 
 
 # ---------------------------------------------------------- LAN discovery
@@ -393,6 +784,54 @@ class H(BaseHTTPRequestHandler):
                 return self._json(401, {"error": "unauthorized"})
             if path.startswith("/v1/"):
                 return self._gateway(method, path)
+            if path == "/api/chat/runs" and method == "POST":
+                b = self._body()
+                request_id = str(b.get("request_id") or "")
+                if not request_id or len(request_id) > 100:
+                    return self._json(400, {"error": "request_id is required and must be at most 100 characters"})
+                try:
+                    run = create_chat_run(request_id, b.get("body"), str(b.get("target") or "").strip())
+                    return self._json(200, {"id": run.id, "node": run.node, "done": run.done})
+                except ValueError as e:
+                    return self._json(400, {"error": str(e)})
+                except LookupError as e:
+                    return self._json(503, {"error": str(e)})
+                except RuntimeError as e:
+                    return self._json(503, {"error": str(e)})
+            if path.startswith("/api/chat/runs/"):
+                run_id = path[len("/api/chat/runs/"):]
+                run = get_chat_run(run_id)
+                if not run:
+                    return self._json(404, {"error": "chat stream not found or expired"})
+                if method == "GET":
+                    query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                    try:
+                        after = max(0, int((query.get("after") or ["0"])[0]))
+                        wait = min(20, max(0, float((query.get("wait") or ["15"])[0])))
+                    except ValueError:
+                        return self._json(400, {"error": "after and wait must be numbers"})
+                    return self._json(200, run.snapshot(after, wait))
+                if method == "DELETE":
+                    run.cancel()
+                    return self._json(200, {"ok": True})
+                return self._json(405, {"error": "method not allowed"})
+            if path == "/api/scheduled-tasks" and method == "GET":
+                return self._json(200, {"tasks": list_scheduled_tasks()})
+            if path == "/api/scheduled-tasks" and method == "POST":
+                b = self._body()
+                try:
+                    task = create_scheduled_task(b.get("prompt"), b.get("due_at"), b.get("model", ""),
+                                                 b.get("target", ""), b.get("system_prompt", ""))
+                    return self._json(201, task)
+                except ValueError as e:
+                    return self._json(400, {"error": str(e)})
+                except RuntimeError as e:
+                    return self._json(503, {"error": str(e)})
+            if path.startswith("/api/scheduled-tasks/") and method == "DELETE":
+                task_id = path[len("/api/scheduled-tasks/"):]
+                if not cancel_scheduled_task(task_id):
+                    return self._json(404, {"error": "scheduled task not found"})
+                return self._json(200, {"ok": True})
             if path == "/api/host" and method == "GET":
                 return self._json(200, {"port": PORT, "lan_urls": ["http://%s:%d" % (ip, PORT) for ip in lan_ips()],
                                         "hostnames": sorted(n for n in own_hostnames() if n != "localhost"),
@@ -456,6 +895,12 @@ class H(BaseHTTPRequestHandler):
             if path == "/api/discover" and method == "POST":
                 known = {n["url"] for n in nodes.values()}
                 return self._json(200, [d for d in discover() if d["url"] not in known])
+            if path.startswith("/api/cluster/workers/") and method == "POST":
+                action = path[len("/api/cluster/workers/"):]
+                try:
+                    return self._json(200, cluster_worker_action(action, self._body()))
+                except ValueError as e:
+                    return self._json(400, {"error": str(e)})
             if path == "/api/cluster/launch" and method == "POST":
                 return self._launch_distributed(self._body())
             if path == "/api/cluster/stop" and method == "POST":
@@ -476,6 +921,9 @@ class H(BaseHTTPRequestHandler):
                 if rest == "logs":
                     code, d = call_node(node, "GET", "/api/logs")
                     return self._json(code, d)
+                if rest == "models/storage" and method == "GET":
+                    code, d = call_node(node, "GET", "/api/models/storage")
+                    return self._json(code, d)
                 if rest == "update" and method == "POST":
                     b = self._body()
                     for k in ("name", "url", "token", "kind"):
@@ -490,8 +938,12 @@ class H(BaseHTTPRequestHandler):
                     with lock:
                         save()
                     return self._json(200, {"ok": True})
+                if rest == "models/move" and method == "POST":
+                    code, d = call_node(node, "POST", "/api/models/move", self._body(), timeout=3600)
+                    return self._json(code, d)
                 if rest in ("start", "stop", "rpc/start", "rpc/stop", "models/install",
-                            "models/delete", "models/cancel", "bench/start", "bench/cancel") and method == "POST":
+                            "models/delete", "models/cancel", "bench/start",
+                            "bench/cancel") and method == "POST":
                     code, d = call_node(node, "POST", "/api/" + rest, self._body(), timeout=30)
                     return self._json(code, d)
             return self._json(404, {"error": "not found"})
@@ -730,7 +1182,9 @@ def main():
                     safe_commands=a.safe_commands.split(","))
     print(f"[controller] chat workspace: {tools.WORKSPACE}  (shell commands {'OFF' if a.no_exec else 'on'})")
     load()
+    load_scheduled_tasks()
     threading.Thread(target=poll_loop, daemon=True).start()
+    threading.Thread(target=scheduled_task_loop, daemon=True, name="scheduled-task-loop").start()
     try:
         srv = Server((a.host, a.port), H)
     except OSError as e:

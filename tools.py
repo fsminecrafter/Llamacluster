@@ -17,6 +17,7 @@ import http.client
 import glob as _glob
 import ipaddress
 import json
+import mimetypes
 import os
 import re
 import shlex
@@ -389,7 +390,7 @@ def approval_reason(name, args, permission):
     if name in ("runweb", "playwright"):
         return "runs workspace page code in a browser (it may access the network)"
     if name in ("web_search", "fetch_url", "list_files", "read_file", "search_files", "write_file", "edit_file",
-                "calculate", "convert_units", "date_time", "question", "task"):     # pure functions / page-only tools
+                "calculate", "convert_units", "date_time", "question", "task", "view_image"):     # pure functions / page-only tools
         return None
     if name == "delete_file":
         return "deletes a file"
@@ -491,6 +492,24 @@ def _run_web(path, timeout=15, screenshot=False):
     except Exception as e:
         raise ToolError("browser run failed: %s: %s" % (type(e).__name__, e))
     return result
+
+
+def _view_image(path=""):
+    """Return a workspace image for the chat page to pass as multimodal tool output."""
+    root, fp = ws_path(path)
+    if not os.path.isfile(fp):
+        raise ToolError("no such file: " + str(path))
+    mime, _ = mimetypes.guess_type(fp)
+    if mime not in ("image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp"):
+        raise ToolError("view_image supports JPEG, PNG, WebP, GIF, and BMP files")
+    size = os.path.getsize(fp)
+    if size > 8 * 1024 * 1024:
+        raise ToolError("image too large to view (maximum 8 MB)")
+    with open(fp, "rb") as f:
+        data = f.read(8 * 1024 * 1024 + 1)
+    if len(data) > 8 * 1024 * 1024:
+        raise ToolError("image too large to view (maximum 8 MB)")
+    return {"path": _rel(root, fp), "mime_type": mime, "image_base64": base64.b64encode(data).decode("ascii")}
 
 
 # ------------------------------------------------------------------- web
@@ -840,14 +859,39 @@ TOOLS = [
         optional={"title": "\u2611 Tasks", "default_on": True,
                   "blurb": "the AI keeps a to-do list you can see: it adds, updates and removes tasks as it works"}),
     _fn("spawn", "spawn",
-        "Ask other free nodes to work with you. Choose a ready model from the available list. In parallel mode, give each worker an independent task. In debate mode, give one question and workers critique and improve one another's answers over several rounds; use this when collaboration would help.",
-        {"model": S, "mode": {"type": "string", "enum": ["parallel", "debate"]},
-         "task": {"type": "string", "description": "Shared question for debate mode"},
+        "Bring another model into this chat as a persistent agent (mode 'agent'), with its own name, conversation history and system prompt. It can communicate with you and the other agents until it calls agent_done or you call despawn. The chat has at most four agents total including Calcium. You may also use 'parallel' or 'debate' for one-shot workers.",
+        {"model": S, "mode": {"type": "string", "enum": ["agent", "parallel", "debate"]},
+         "task": {"type": "string", "description": "Initial assignment for an agent, or shared question for debate mode"},
          "tasks": {"type": "array", "items": S, "description": "Independent worker tasks for parallel mode"},
          "workers": {"type": "integer", "description": "2-4 debaters; defaults to available slots"},
          "rounds": {"type": "integer", "description": "Debate rounds, 1-3; default 2"}}, ["model", "mode"],
-        optional={"title": "Spawn models", "default_on": False,
-                  "blurb": "delegate or debate with other ready models; worker tools run concurrently"}),
+        optional={"title": "Spawn", "default_on": True, "section": "Other tools",
+                  "blurb": "add a persistent named AI to this chat, or run one-shot parallel/debate workers"}),
+    _fn("tell", "tell",
+        "Send a non-interrupting message to a live agent. If it is busy, the message waits until its current reply finishes; if it is waiting, it starts a new turn.",
+        {"target": S, "message": S}, ["target", "message"],
+        optional={"title": "Tell an agent", "default_on": True, "section": "Other tools",
+                  "blurb": "queue a message for an agent without interrupting its current reply"}),
+    _fn("interrupt", "interrupt",
+        "Interrupt a live agent's current reply and send it a new message. Use tell instead if it should finish its current reply first.",
+        {"target": S, "message": S}, ["target", "message"],
+        optional={"title": "Interrupt an agent", "default_on": True, "section": "Other tools",
+                  "blurb": "stop an agent's current reply and redirect it"}),
+    _fn("status", "status",
+        "Read the current status of one live agent, or all live agents. This only reads local chat state and does not message or interrupt them.",
+        {"target": S}, [],
+        optional={"title": "Agent status", "default_on": True, "section": "Other tools",
+                  "blurb": "check an agent's state without interrupting it"}),
+    _fn("despawn", "despawn",
+        "Remove a live agent from this chat and stop its current request. Use only when the agent is no longer needed.",
+        {"target": S}, ["target"],
+        optional={"title": "Despawn an agent", "default_on": True, "section": "Other tools",
+                  "blurb": "remove an agent and stop its current request"}),
+    _fn("agent_done", "agent_done",
+        "Tell the chat that you consider your assignment complete. Use this when you have finished and do not need to remain available for more messages.",
+        {}, [],
+        optional={"title": "Finish agent turn", "default_on": True, "section": "Other tools",
+                  "blurb": "let the chat know you are done and leave the active agent roster"}),
     _fn("runweb", "runweb",
         "Run a workspace .html or .htm file in headless Chromium and return its browser console output. A screenshot is also returned to vision-capable models. Use this to test a web page after changes.",
         {"path": S, "timeout": {"type": "integer", "description": "seconds, 1-30; default 15"},
@@ -860,6 +904,12 @@ TOOLS = [
          "screenshot": {"type": "boolean", "description": "the chat page sets this automatically for vision models"}}, ["path"],
         optional={"title": "Playwright", "default_on": False,
                   "blurb": "run the currently opened saved HTML file with Playwright and inspect console output/screenshot"}),
+    _fn("view_image", "view_image",
+        "Look at an image in the workspace or a previous chat attachment. Use path for a workspace-relative image path, or attachment for a 1-based image number from the chat. The chat page passes the image itself to your vision model.",
+        {"path": {"type": "string", "description": "workspace-relative image path"},
+         "attachment": {"type": "integer", "description": "1-based image number from the current chat (the chat page lists available images)"}}, [],
+        optional={"title": "🖼 View image", "default_on": True,
+                  "blurb": "inspect an image from the workspace or an earlier chat attachment (multimodal models only)"}),
 ]
 
 
@@ -892,10 +942,13 @@ def _browser_only(**_kw):
     raise ToolError("this tool runs inside the chat page (it needs the user's browser) and cannot be run through the API")
 
 
-_IMPL = {"question": _browser_only, "task": _browser_only, "spawn": _browser_only, "calculate": _calculate, "convert_units": _convert_units, "date_time": _date_time,
+_IMPL = {"question": _browser_only, "task": _browser_only, "spawn": _browser_only, "tell": _browser_only,
+         "interrupt": _browser_only, "status": _browser_only, "despawn": _browser_only, "agent_done": _browser_only,
+         "calculate": _calculate, "convert_units": _convert_units, "date_time": _date_time,
          "web_search": web_search, "fetch_url": fetch_url, "list_files": list_files, "read_file": read_file,
          "write_file": write_file, "edit_file": edit_file, "delete_file": delete_file,
-         "search_files": search_files, "exec_command": exec_command, "runweb": _run_web, "playwright": _run_web}
+         "search_files": search_files, "exec_command": exec_command, "runweb": _run_web, "playwright": _run_web,
+         "view_image": _view_image}
 
 
 def run(name, args):

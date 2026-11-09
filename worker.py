@@ -17,12 +17,14 @@ import platform
 import re
 import shutil
 import signal
+import subprocess
 import socket
 import struct
 import subprocess
 import sys
 import threading
 import time
+import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -244,9 +246,19 @@ def gguf_meta(path):
 # ------------------------------------------------------------------ state
 class Worker:
     def __init__(self, args):
+        self.args = args
         self.token = args.token
+        self.models_dir_pref = os.path.join(
+            os.path.expanduser("~"), ".config", "llamacluster", "models-dir")
         self.models_dir = os.path.abspath(os.path.expanduser(args.models_dir))
+        if os.path.isfile(self.models_dir_pref):
+            with open(self.models_dir_pref, "r", encoding="utf-8") as f:
+                preferred_models_dir = f.read().strip()
+            if preferred_models_dir:
+                self.models_dir = os.path.abspath(os.path.expanduser(preferred_models_dir))
         os.makedirs(self.models_dir, exist_ok=True)
+        self.storage_roots = [os.path.abspath(os.path.expanduser(p))
+                              for p in (getattr(args, "storage_roots", []) or []) if p]
         self.llama_port = args.llama_port
         self.rpc_port = args.rpc_port
         self.server_bin_hint = args.llama_server
@@ -257,6 +269,7 @@ class Worker:
         self.proc = None          # llama-server
         self.proc_cfg = None
         self.rpc_proc = None      # rpc-server
+        self.rpc_cfg = None
         self.logs = []            # ring buffer
         self.lock = threading.Lock()
         self.downloads = {}       # id -> dict
@@ -332,6 +345,105 @@ class Worker:
         res = self._bench_load()
         if res.pop(name, None) is not None:
             self._bench_save(res)
+
+    def model_storage(self):
+        roots = set()
+        for root in getattr(self, "storage_roots", []):
+            if root and os.path.isdir(root):
+                roots.add(os.path.realpath(root))
+        try:
+            with open("/proc/mounts", encoding="utf-8") as mounts:
+                for line in mounts:
+                    fields = line.split()
+                    if len(fields) < 3 or fields[2] in {
+                            "proc", "sysfs", "devtmpfs", "devpts", "tmpfs", "cgroup",
+                            "cgroup2", "pstore", "securityfs", "debugfs", "tracefs",
+                            "configfs", "overlay", "squashfs", "fusectl", "mqueue"}:
+                        continue
+                    mountpoint = fields[1].replace("\\040", " ").replace("\\011", "\t")
+                    if mountpoint != "/" and os.path.isdir(mountpoint):
+                        roots.add(os.path.realpath(mountpoint))
+        except OSError:
+            if not roots:
+                raise
+        storages = []
+        for root in sorted(roots):
+            usage = shutil.disk_usage(root)
+            storages.append({"path": root, "name": os.path.basename(root) or root,
+                             "free_bytes": usage.free, "total_bytes": usage.total,
+                             "target_exists": os.path.lexists(os.path.join(
+                                 root, os.path.basename(self.models_dir)))})
+        required_bytes = sum(os.path.getsize(os.path.join(root, name))
+                             for root, _, files in os.walk(self.models_dir)
+                             for name in files)
+        busy = (self.is_running() or self.rpc_proc is not None or self.inflight > 0
+                or bool(self.bench_job.get("running"))
+                or any(d.get("state") in ("running", "retrying") for d in self.downloads.values()))
+        return {"models_dir": self.models_dir, "folder_name": os.path.basename(self.models_dir),
+                "required_bytes": required_bytes, "storages": storages, "busy": busy}
+
+    def move_models(self, destination):
+        if not isinstance(destination, str) or not destination.strip():
+            raise ValueError("destination path is required")
+        if (self.is_running() or self.rpc_proc is not None or self.inflight > 0
+                or self.bench_job.get("running")
+                or any(d.get("state") in ("running", "retrying") for d in self.downloads.values())):
+            raise ValueError("stop the server and wait for downloads and benchmarks to finish before moving models")
+        source = os.path.realpath(self.models_dir)
+        destination = os.path.abspath(os.path.expanduser(destination.strip()))
+        if destination == source or destination.startswith(source + os.sep) or source.startswith(destination + os.sep):
+            raise ValueError("destination must not be the current models directory or one of its parents or children")
+        if os.path.lexists(destination):
+            raise ValueError("destination already exists; choose an empty path that does not exist")
+        parent = os.path.dirname(destination)
+        if not os.path.isdir(parent):
+            raise ValueError("destination parent directory does not exist")
+        required_bytes = sum(os.path.getsize(os.path.join(root, name))
+                             for root, _, files in os.walk(source)
+                             for name in files)
+        if shutil.disk_usage(parent).free < required_bytes:
+            raise ValueError("destination does not have enough free space for the models")
+        for root, dirs, files in os.walk(source, followlinks=False):
+            if any(os.path.islink(os.path.join(root, name)) for name in dirs + files):
+                raise ValueError("models directory contains a symbolic link; remove it before moving models")
+        stage = destination + ".moving-" + uuid.uuid4().hex
+        destination_created = False
+        try:
+            shutil.copytree(source, stage, symlinks=True)
+            for root, dirs, files in os.walk(source):
+                rel = os.path.relpath(root, source)
+                target_root = stage if rel == "." else os.path.join(stage, rel)
+                for name in files:
+                    old = os.path.join(root, name)
+                    new = os.path.join(target_root, name)
+                    if not os.path.isfile(new) or os.path.getsize(old) != os.path.getsize(new):
+                        raise ValueError("model copy verification failed")
+            os.replace(stage, destination)
+            destination_created = True
+            os.makedirs(os.path.dirname(self.models_dir_pref), exist_ok=True)
+            pref_tmp = self.models_dir_pref + ".tmp"
+            with open(pref_tmp, "w", encoding="utf-8") as f:
+                f.write(destination + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(pref_tmp, self.models_dir_pref)
+        except Exception:
+            if os.path.isdir(stage):
+                shutil.rmtree(stage)
+            if destination_created and os.path.isdir(destination):
+                shutil.rmtree(destination)
+            raise
+
+        old_dir = self.models_dir
+        self.models_dir = destination
+        self.journal_path = os.path.join(destination, ".downloads.json")
+        self.bench_path = os.path.join(destination, ".bench.json")
+        try:
+            shutil.rmtree(old_dir)
+            warning = None
+        except OSError as e:
+            warning = "models moved, but the old directory could not be removed: " + str(e)
+        return {"ok": True, "models_dir": destination, "warning": warning}
 
     # --- download journal: survives power cuts so downloads can resume after a reboot
     def _jload(self):
@@ -607,7 +719,7 @@ class Worker:
         extra = (cfg.get("extra_args") or "").strip()
         mm_used = ""
         want = (cfg.get("mmproj") or "").strip()
-        if not re.search(r"(^|\s)(--mmproj|-mm|--no-mmproj|-hf|--hf-repo)(\s|=|$)", extra) and want.lower() != "none":
+        if cfg.get("supports_images", True) and not re.search(r"(^|\s)(--mmproj|-mm|--no-mmproj|-hf|--hf-repo)(\s|=|$)", extra) and want.lower() != "none":
             mm_name = want if want and want.lower() != "auto" else self.pick_mmproj(cfg["model"])
             if mm_name:
                 cmd += ["--mmproj", self.resolve_model(mm_name)]
@@ -804,11 +916,13 @@ class Worker:
         self.log("[worker] exec: " + " ".join(cmd))
         self.rpc_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                          text=True, bufsize=1, start_new_session=True)
+        self.rpc_cfg = dict(cfg)
         threading.Thread(target=self._pump, args=(self.rpc_proc, "rpc"), daemon=True).start()
 
     def stop_rpc(self):
         self._kill(self.rpc_proc)
         self.rpc_proc = None
+        self.rpc_cfg = None
 
     @staticmethod
     def _kill(p):
@@ -828,6 +942,7 @@ class Worker:
         return {
             "name": self.name,
             "version": VERSION,
+            "os": platform.system(),
             "hardware": hardware_info(),
             "ips": local_ips(),
             "llama_server_found": bool(find_binary("llama-server", self.server_bin_hint)),
@@ -837,7 +952,7 @@ class Worker:
                 "config": self.proc_cfg if self.is_running() else None,
                 "uptime_s": int(time.time() - self.started_at) if self.started_at and self.is_running() else 0,
                 "inflight": self.inflight,
-                "vision": bool(self.is_running() and ((self.proc_cfg or {}).get("mmproj_used")
+                "vision": bool(self.is_running() and (((self.proc_cfg or {}).get("supports_images", True) and (self.proc_cfg or {}).get("mmproj_used"))
                                or re.search(r"(^|\s)(--mmproj|-mm)(\s|=)", (self.proc_cfg or {}).get("extra_args") or ""))),
             },
             "rpc": {"running": bool(self.rpc_proc and self.rpc_proc.poll() is None), "port": self.rpc_port},
@@ -900,6 +1015,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self._proxy(method)
             if path == "/api/status" and method == "GET":
                 return self._json(200, W.status())
+            if path == "/api/service/install" and method == "POST":
+                return self._json(202, install_autostart(self._body().get("token")))
+            if path == "/api/service/uninstall" and method == "POST":
+                return self._json(202, uninstall_autostart())
+            if path == "/api/service/restart" and method == "POST":
+                return self._json(202, restart_worker())
+            if path == "/api/update" and method == "POST":
+                return self._json(202, update_source())
+            if path == "/api/models/storage" and method == "GET":
+                return self._json(200, W.model_storage())
+            if path == "/api/models/move" and method == "POST":
+                return self._json(200, W.move_models(self._body().get("destination")))
             if path == "/api/logs" and method == "GET":
                 return self._json(200, {"lines": W.logs[-400:]})
             if path == "/api/start" and method == "POST":
@@ -1043,6 +1170,255 @@ def kill_orphans(native_dir):
 
 
 _SRV = None
+SERVICE_NAME = "llamacluster-worker"
+
+
+def _systemd_user():
+    if platform.system() != "Linux":
+        raise RuntimeError("autostart services are supported only on Linux")
+    systemctl = shutil.which("systemctl")
+    if not systemctl:
+        raise RuntimeError("systemctl was not found; this Linux host does not support systemd user services")
+    result = subprocess.run([systemctl, "--user", "show-environment"], capture_output=True,
+                            text=True, timeout=10)
+    if result.returncode:
+        detail = (result.stderr or result.stdout).strip()
+        raise RuntimeError("systemd user manager is unavailable" + (": " + detail if detail else ""))
+    return systemctl
+
+
+def _systemd_quote(value):
+    value = str(value)
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in value):
+        raise RuntimeError("service arguments cannot contain control characters")
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%").replace("$", "$$") + '"'
+
+
+def _service_paths():
+    config = os.path.join(os.path.expanduser("~"), ".config")
+    return (os.path.join(config, "systemd", "user", SERVICE_NAME + ".service"),
+            os.path.join(config, "llamacluster", "worker.env"))
+
+
+def _restart_model_path():
+    return os.path.join(os.path.expanduser("~"), ".config", "llamacluster", "restart-model.json")
+
+
+def _save_restart_model():
+    if not W:
+        return
+    state = {
+        "model": W.proc_cfg if W.is_running() else None,
+        "rpc": W.rpc_cfg if W.rpc_proc and W.rpc_proc.poll() is None else None,
+    }
+    if not any(state.values()):
+        return
+    try:
+        _atomic_private_write(_restart_model_path(), json.dumps(state))
+    except OSError as e:
+        W.log("[worker] could not save the active model for restart: " + str(e))
+
+
+def _restore_restart_model():
+    path = _restart_model_path()
+    try:
+        with open(path, encoding="utf8") as f:
+            state = json.load(f)
+    except FileNotFoundError:
+        return
+    except (OSError, ValueError) as e:
+        W.log("[worker] could not restore the model after worker restart: " + str(e))
+        return
+    try:
+        os.unlink(path)
+        if isinstance(state, dict) and ("model" in state or "rpc" in state):
+            if state.get("model"):
+                W.start_server(state["model"])
+            if state.get("rpc"):
+                W.start_rpc(state["rpc"])
+        else:
+            W.start_server(state)
+    except Exception as e:
+        W.log("[worker] model restart failed: " + str(e))
+
+
+def _service_command():
+    args = W.args
+    command = [sys.executable, os.path.abspath(__file__),
+               "--host", args.host, "--port", str(args.port), "--name", W.name,
+               "--models-dir", W.models_dir, "--llama-port", str(W.llama_port),
+               "--rpc-port", str(W.rpc_port)]
+    if W.server_bin_hint:
+        command.extend(["--llama-server", W.server_bin_hint])
+    if W.rpc_bin_hint:
+        command.extend(["--rpc-server", W.rpc_bin_hint])
+    for root in W.storage_roots:
+        command.extend(["--storage-root", root])
+    return " ".join(_systemd_quote(arg) for arg in command)
+
+
+def _atomic_private_write(path, content):
+    os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+    tmp = path + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf8") as f:
+        f.write(content)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+
+
+def _systemctl(systemctl, *args):
+    result = subprocess.run([systemctl, "--user", *args], capture_output=True,
+                            text=True, timeout=30)
+    if result.returncode:
+        detail = (result.stderr or result.stdout).strip()
+        raise RuntimeError("systemctl " + " ".join(args) + " failed" +
+                           (": " + detail if detail else ""))
+    return result
+
+
+def _service_active(systemctl):
+    result = subprocess.run([systemctl, "--user", "is-active", "--quiet", SERVICE_NAME + ".service"],
+                            capture_output=True, text=True, timeout=10)
+    return result.returncode == 0
+
+
+def _worker_handover(start_service=False):
+    time.sleep(1)
+    _save_restart_model()
+    W.stop_server()
+    W.stop_rpc()
+    if _SRV:
+        _SRV.shutdown()
+        _SRV.server_close()
+    if start_service and _SRV:
+        systemctl = shutil.which("systemctl")
+        if systemctl:
+            result = subprocess.run([systemctl, "--user", "start", SERVICE_NAME + ".service"],
+                                    capture_output=True, text=True, timeout=30)
+            if result.returncode:
+                print("[worker] could not activate autostart service:", (result.stderr or result.stdout).strip(),
+                      flush=True)
+                _exec_worker()
+        return
+    _exec_worker()
+
+
+def _exec_worker():
+    os.environ["LLAMACLUSTER_TOKEN"] = W.token
+    args = sys.argv[1:]
+    clean = []
+    skip = False
+    for arg in args:
+        if skip:
+            skip = False
+            continue
+        if arg == "--token":
+            skip = True
+        elif not arg.startswith("--token="):
+            clean.append(arg)
+    os.execv(sys.executable, [sys.executable, os.path.abspath(__file__), *clean])
+
+
+def _schedule_worker_handover(start_service=False):
+    threading.Thread(target=_worker_handover, args=(start_service,), daemon=False,
+                     name="worker-service-handover").start()
+
+
+def install_autostart(token):
+    systemctl = _systemd_user()
+    token = str(token or "")
+    if not re.fullmatch(r"[A-Za-z0-9._~+/=-]{12,256}", token):
+        raise RuntimeError("worker token must be 12-256 characters using letters, numbers, . _ ~ + / = or -")
+    unit_path, env_path = _service_paths()
+    unit = (
+        "[Unit]\nDescription=LlamaCluster worker\nAfter=network-online.target\nWants=network-online.target\n\n"
+        "[Service]\nType=simple\n"
+        f"EnvironmentFile={_systemd_quote(env_path)}\n"
+        f"WorkingDirectory={_systemd_quote(os.path.dirname(os.path.abspath(__file__)))}\n"
+        f"ExecStart={_service_command()}\nRestart=on-failure\nRestartSec=3\n\n"
+        "[Install]\nWantedBy=default.target\n"
+    )
+    active = _service_active(systemctl)
+    os.makedirs(os.path.dirname(unit_path), mode=0o700, exist_ok=True)
+    _atomic_private_write(unit_path, unit)
+    _atomic_private_write(env_path, "LLAMACLUSTER_TOKEN=" + token + "\n")
+    W.token = token
+    os.environ["LLAMACLUSTER_TOKEN"] = token
+    _systemctl(systemctl, "daemon-reload")
+    _systemctl(systemctl, "enable", SERVICE_NAME + ".service")
+    _schedule_worker_handover(start_service=not active)
+    return {"ok": True, "service": SERVICE_NAME, "restart_pending": True,
+            "message": "Enabled the systemd user service; activation is restarting the worker."}
+
+
+def uninstall_autostart():
+    systemctl = _systemd_user()
+    unit_path, env_path = _service_paths()
+    if not os.path.isfile(unit_path):
+        raise RuntimeError("the LlamaCluster autostart service is not installed")
+    active = _service_active(systemctl)
+    if active:
+        def uninstall_after_response():
+            time.sleep(1)
+            _systemctl(systemctl, "disable", SERVICE_NAME + ".service")
+            for path in (unit_path, env_path):
+                try:
+                    os.unlink(path)
+                except FileNotFoundError:
+                    pass
+            _systemctl(systemctl, "daemon-reload")
+            _systemctl(systemctl, "stop", "--no-block", SERVICE_NAME + ".service")
+        threading.Thread(target=uninstall_after_response, daemon=True,
+                         name="worker-service-uninstall").start()
+        return {"ok": True, "service": SERVICE_NAME, "restart_pending": True,
+                "message": "Autostart removal is stopping the managed worker."}
+    _systemctl(systemctl, "disable", SERVICE_NAME + ".service")
+    for path in (unit_path, env_path):
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+    _systemctl(systemctl, "daemon-reload")
+    return {"ok": True, "service": SERVICE_NAME, "message": "Autostart service removed."}
+
+
+def restart_worker():
+    unit_path, _ = _service_paths()
+    systemctl = shutil.which("systemctl")
+    _schedule_worker_handover(start_service=bool(systemctl and os.path.isfile(unit_path)
+                                                   and not _service_active(systemctl)))
+    return {"ok": True, "restart_pending": True, "message": "Worker restart scheduled."}
+
+
+def update_source():
+    if platform.system() != "Linux":
+        raise RuntimeError("LlamaCluster updates are supported only on Linux worker checkouts")
+    git = shutil.which("git")
+    if not git:
+        raise RuntimeError("git was not found on this Linux host")
+    source = os.path.abspath(__file__)
+    root = os.path.dirname(source)
+    check = subprocess.run([git, "-C", root, "rev-parse", "--show-toplevel"],
+                           capture_output=True, text=True, timeout=15)
+    if check.returncode:
+        raise RuntimeError("worker.py is not inside a git checkout")
+    root = check.stdout.strip()
+    if not root or not os.path.isfile(os.path.join(root, "controller.py")):
+        raise RuntimeError("the checkout does not contain the LlamaCluster controller")
+    dirty = subprocess.run([git, "-C", root, "status", "--porcelain"],
+                           capture_output=True, text=True, timeout=15)
+    if dirty.returncode:
+        raise RuntimeError("could not check git working tree: " + dirty.stderr.strip())
+    if dirty.stdout.strip():
+        raise RuntimeError("git working tree has local changes; refusing to overwrite them")
+    pull = subprocess.run([git, "-C", root, "pull", "--ff-only", "origin", "main"],
+                          capture_output=True, text=True, timeout=300)
+    if pull.returncode:
+        raise RuntimeError("git pull origin main failed: " + (pull.stderr or pull.stdout).strip())
+    _schedule_worker_handover()
+    return {"ok": True, "restart_pending": True, "output": pull.stdout.strip(),
+            "message": "Updated from origin/main; worker restart scheduled."}
 
 
 def serve(args, install_signals=True):
@@ -1059,6 +1435,7 @@ def serve(args, install_signals=True):
         signal.signal(signal.SIGINT, bye)
         signal.signal(signal.SIGTERM, bye)
     threading.Thread(target=W.recover_downloads, daemon=True).start()
+    threading.Thread(target=_restore_restart_model, daemon=True, name="worker-model-restore").start()
     _SRV.serve_forever()
 
 
@@ -1080,6 +1457,8 @@ def main():
                     help="shared secret (strongly recommended; required if exposed to the internet)")
     ap.add_argument("--name", default="")
     ap.add_argument("--models-dir", default=os.environ.get("LLAMACLUSTER_MODELS", "~/llamacluster-models"))
+    ap.add_argument("--storage-root", action="append", default=[],
+                    help="additional storage directory to offer as a model destination")
     ap.add_argument("--llama-server", default=os.environ.get("LLAMA_SERVER_BIN", ""))
     ap.add_argument("--rpc-server", default=os.environ.get("LLAMA_RPC_BIN", ""))
     ap.add_argument("--llama-port", type=int, default=8080)

@@ -33,6 +33,8 @@ Per node you can: pick a model, change settings (context, GPU layers, threads, p
 batch sizes, any extra `llama-server` flags), start/stop, view logs, and **install models**
 (Hugging Face search, or a direct `.gguf` URL — downloaded straight onto that node).
 
+**Workspace → Tools → Worker services** can install or uninstall a Linux systemd user autostart service on configured worker nodes, restart all workers, or update each worker with `git pull --ff-only origin main` and restart it. Installation asks for a shared worker token and whether the selected controller node also runs a worker. Only nodes whose reported OS is Linux are sent an install request; the worker also checks for a usable systemd user manager before writing its service. User services start on login; boot before login may require enabling systemd lingering for that account. Updates refuse dirty git checkouts and require a Linux worker with a clean LlamaCluster clone and Git access to `origin/main`. Restarts preserve and relaunch the active model with its current settings.
+
 **Downloads survive power cuts and network drops.** A dropped connection is retried automatically with backoff and
 resumes from the `.part` file (HTTP Range). Progress is journaled in `<models-dir>/.downloads.json` (fsynced every 32 MiB,
 mode 0600 because it can hold a node-copy token); when a worker starts it resumes any interrupted download, trimming the
@@ -114,8 +116,13 @@ animated Calcium icon (a hexagonal node ring with a light travelling around it) 
 Other apps calling the `/v1` endpoint are not affected — they bring their own system prompt. Pick a model, or pin a request to
 one node with *Send to* (sent as an `X-LlamaCluster-Target: <node name>` header; leave on Auto for load balancing).
 System prompt, temperature and max tokens are under the fold; Stop/↻ interrupt and regenerate. History lives in your browser only.
+Press **Ctrl+Enter** to add a message to the send queue; queued messages send in order after the current reply.
+Chat generation runs in a controller-managed stream, so a temporary browser disconnect or sleeping tab does not close the model's
+request; when the page reconnects it replays the buffered output. Pressing **Stop** still cancels the active generation.
 
 Type `/btw <question>` while Calcium is working to ask a side question in a separate request; it does not stop or enter the active conversation. Under **Workspace → Tools**, **Compact behavior** chooses AI summaries or a deterministic script snapshot (last user message, tool call and AI output, up to 300 characters each). AI compaction falls back to the snapshot if it errors or returns an empty answer. The context gauge separates tool definitions, tool-call overhead and tool outputs.
+
+Slash commands include `/models` (show ready models), `/read <file>` (add a workspace text file to the chat), and `/view <image>` (send a workspace image to the selected vision model). File paths autocomplete from the controller workspace. `/schedule 09:00-11-28 <prompt>` schedules a one-time prompt for 09:00 on November 28 in the browser's local time; you can also provide only `HH:MM` or `MM-DD` (date-only runs at 09:00). Dates without a year use the next future occurrence. Scheduled prompts run on the controller even if the browser is closed, but do not have chat tools; use `/schedule list` to review them and `/schedule cancel <id>` to cancel.
 
 **Layout & saved settings** — drag the chat's left edge to resize it (double-click the edge to reset), or press ⛶ for a fullscreen chat (Esc leaves it); both are remembered. Each node's ⚙ Settings (context, GPU layers, threads, slots, batch, extra args) are saved **per model, per node** in your browser: switching the Model dropdown loads that model's own config, editing or pressing Start saves it, and “reset this model” returns to the defaults. The chat's temperature and max-tokens are also remembered per model. The browser tab uses the Calcium icon.
 
@@ -149,6 +156,8 @@ a model that doesn't fit shows “bench failed” with the reason on hover. The 
 while a benchmark runs (Cancel is on the card). Results are kept in `<models-dir>/.bench.json` and dropped if the model file changes or is deleted.
 Needs the updated `worker.py` on the node.
 
+**Move Models** (button on each node card) copies the complete model directory, verifies the copied files, then persists the new location for the next worker restart. Stop the model server and finish downloads or benchmarks first. Choose a detected storage volume or enter an advanced destination path; enough free space is required.
+
 ### Clear, `/compact` and auto-compact
 
 * **Clear** now empties everything the model can see: messages and tool results, any compaction summary, software-mode state and a pending question. If a run was still going (for example a tool call in flight), it is stopped and wiped again when it ends, so late results can't land in the new chat.
@@ -164,13 +173,11 @@ one that uses `enable_thinking` (Qwen3 and similar) gives **Default / Off / On**
 (a 🧠 marks supported models in *Installed models*). Needs the **updated `worker.py`** on the node, then restart the model once so the
 list refreshes; `llama-server` is already started with `--jinja`.
 
-**🖼 Image input** — a multimodal model needs two files: the model and its **vision projector** (`mmproj-*.gguf`). Install both
+**🖼 Image input** — a multimodal model needs two files: the model and its **vision projector** (`mmproj-*.gguf`). In a node's per-model settings, enable **Multimodal model (enable image input)** and choose a projector, or leave it on Auto to match by name. Install both
 (the Hugging Face file list marks projectors with 👁; they are saved as `<repo>-mmproj-….gguf` so projectors from different repos don't
-overwrite each other). Projectors are listed separately from models. In a node's ⚙ Settings, **Vision projector** is *Auto* by default
-(picks the projector with the same base name in the same folder), or choose a file / *None*. When the model is running with a projector the
+overwrite each other). Projectors are listed separately from models. The image-input assignment and projector choice are saved per model and node; choose *None* or turn the assignment off for a text-only configuration. When the model is running with a projector the
 node shows 👁 vision and the chat's 📎 button works: attach, paste or drag in images (JPEG/PNG/WebP…, up to 6 per message, shrunk to 1280 px
-in the browser). Images stay in your browser (IndexedDB), never in the saved chat text. If the selected model/node can't see images the button is
-disabled, and older pictures in the history are replaced by a short note instead of being sent. Orchestra / Leader / Software modes
+in the browser). Images can be staged before selecting a vision model, but sending them requires a ready multimodal model. Images stay in your browser (IndexedDB), never in the saved chat text, and older pictures in the history are replaced by a short note instead of being sent to a text-only model. Vision models also get the optional **View image** tool: it can inspect a workspace image by path or a previous chat attachment. The context viewer adds a cyan **Image context** segment only when images are sent to the model. Orchestra / Leader / Software modes
 are text-only. Pictures cost tokens (roughly 300–1500 each, depending on the model) – the context ring counts them.
 
 ### 🎯 Recommend model
@@ -240,8 +247,8 @@ tries to instruct the model, so use *Manual* or *Semi* permissions unless you tr
 
 The ring next to the message box shows how full the model's context window is: an empty ring is an empty context, half a ring
 is 50%. It turns **orange at 75%** and **red at 95%**. Click it for the breakdown, a bar split into **System prompt** (red,
-including the tool notes and the mode's note), **Tools** (orange, the tool definitions sent with every request), **Tools other**
-(yellow, the tool calls and their results), **User** (green, your messages and the replies) and **Free space** (blue).
+including the tool notes and the mode's note), **Tool** (red, the tool definitions sent with every request), **Tool others**
+(orange, tool-call JSON), **Tool outputs** (amber, returned results), **User** (green, your messages and replies), **Image context** (cyan, images sent to a vision model) and **Free space** (blue).
 The window is the node's *context size ÷ parallel slots* (one conversation gets one slot); with several nodes and no node
 picked it is the smallest of them, with a node (or the Leader) picked it is that node's. The numbers are an estimate (about
 3.8 characters per token, 3.2 for JSON), matched to the real prompt size the server reports after each reply. Tests:
@@ -375,7 +382,9 @@ Two more optional tools talk to *you*, so the chat page runs them itself (the co
   cleared with it, and is shown to the assistant in its system prompt so it keeps the ids straight. At most 50 tasks. Not
   available in Ask mode (it only reads files); Orchestra and Leader workers may use it.
 
-**🧠 Spawn models** (`spawn`, off by default) lets the assistant select a model that is ready on a node with free capacity, then delegate independent tasks concurrently or run a multi-round debate. Spawned workers can use enabled tools; tool permissions still apply. **🌐 Run web page** (`runweb`, off by default) executes a workspace `.html` / `.htm` file in headless Chromium and returns console output; vision-capable models also receive a screenshot. Since this runs page JavaScript (which can access the network), Semi mode asks for approval. Install the optional runtime with `pip install -r requirements-web.txt` and `python3 -m playwright install chromium`.
+Under **Other tools** (on by default), `spawn` can bring a persistent model into the chat as Hydrogen, Indium or Sulfur; Calcium plus these agents is capped at four active agents. Agents keep separate conversation histories and editable system prompts, show individual context rings, and remain available until they call `agent_done` or Calcium removes them with `despawn`. `tell` queues a message without interrupting an agent, `interrupt` stops its current reply and redirects it, and `status` reads the current state without disturbing it. `spawn` also retains its one-shot parallel and debate modes. Agents use the enabled tools and the same permission settings as Calcium.
+
+**🌐 Run web page** (`runweb`, off by default) executes a workspace `.html` / `.htm` file in headless Chromium and returns console output; vision-capable models also receive a screenshot. Since this runs page JavaScript (which can access the network), Semi mode asks for approval. Install the optional runtime with `pip install -r requirements-web.txt` and `python3 -m playwright install chromium`.
 
 **🌐 Playwright** (`playwright`, off by default) is available when a saved `.html` or `.htm` file is open in Workspace → Files. It runs that open file with Playwright, returning console output and a screenshot to vision-capable models. Save editor changes before calling it. Workspace files can be downloaded individually from their rows, or together with **↓ ZIP**; the archive includes hidden files and skips symlinks.
 

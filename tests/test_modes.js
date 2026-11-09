@@ -1,10 +1,10 @@
 // node tests/test_modes.js - which tool groups each chat mode may use (extracted from ui.html)
 const fs=require('fs'),path=require('path');
 const src=fs.readFileSync(path.join(__dirname,'..','ui.html'),'utf8');
-const a=src.indexOf('const isOptGroup='),b=src.indexOf('function activeTools()');
+const a=src.indexOf('const isOptGroup='),b=src.indexOf('function activeTools(');
 const blk=src.slice(a,b);
-const TOOLINFO={tools:[{group:'search',optional:false},{group:'read'},{group:'write'},{group:'exec'},{group:'calc',optional:true},{group:'question',optional:true},{group:'tasks',optional:true},{group:'spawn',optional:true},{group:'runweb',optional:true},{group:'playwright',optional:true}]};
-const CH={mode:'dev',tools:{search:1,read:1,write:1,exec:1,calc:1,question:1,tasks:1,spawn:1,runweb:1,playwright:1}};
+const TOOLINFO={tools:[{group:'search',optional:false},{group:'read'},{group:'write'},{group:'exec'},{group:'calc',optional:true},{group:'question',optional:true},{group:'tasks',optional:true},{group:'spawn',optional:true},{group:'runweb',optional:true},{group:'playwright',optional:true},{group:'view_image',optional:true}]};
+const CH={mode:'dev',tools:{search:1,read:1,write:1,exec:1,calc:1,question:1,tasks:1,spawn:1,runweb:1,playwright:1,view_image:1}};
 const groupOk=new Function('TOOLINFO','CH',blk+';return groupOk')(TOOLINFO,CH);
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const can=(mode,g)=>{CH.mode=mode;return !!groupOk(g)};
@@ -16,5 +16,6 @@ ok(can('ask','read')&&!can('ask','write'),'ask still reads files, cannot write')
 ok(can('orchestra','write')&&can('leader','exec'),'orchestra/leader keep their other tools');
 for(const g of ['spawn','runweb','playwright'])ok(can('dev',g)&&can('plan',g)&&can('software',g),'optional '+g+' available in Dev, Plan and Software');
 for(const g of ['spawn','runweb','playwright'])ok(!can('ask',g),'Ask mode stays read-only: no '+g);
+ok(can('ask','view_image'),'Ask mode can inspect images without changing files');
 CH.tools.question=0;ok(!can('dev','question'),'switched off in the workspace dialog -> unavailable');
 console.log(fails?fails+' FAILED':'ALL PASSED');process.exit(fails?1:0);
