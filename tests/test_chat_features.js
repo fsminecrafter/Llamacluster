@@ -2,6 +2,31 @@
 const fs=require('fs'),path=require('path');
 const src=fs.readFileSync(path.join(__dirname,'..','ui.html'),'utf8');
 const ok=(condition,message)=>{if(!condition)throw Error(message);console.log('ok  ',message)};
+const identityStart=src.indexOf('const OLD_OPEN='),identityEnd=src.indexOf('const TOOL_DEFAULTS=',identityStart);
+const prompts=new Function(src.slice(identityStart,identityEnd)+';return {DEFAULT_SYS,NEW_OPEN}')();
+const defaultPromptStart=src.indexOf('function agentDefaultPrompt('),defaultPromptEnd=src.indexOf('function migrateAgentIdentityPrompts(',defaultPromptStart);
+const agentDefaultPrompt=new Function('DEFAULT_SYS',src.slice(defaultPromptStart,defaultPromptEnd)+';return agentDefaultPrompt')(prompts.DEFAULT_SYS);
+const identities={Calcium:'he/him',Hydrogen:'she/her',Indium:'he/him',Sulfur:'she/her'};
+ok(prompts.NEW_OPEN.includes('Gender identity: he')&&prompts.NEW_OPEN.includes('he/him'),'adds Calcium’s he/him identity to the primary system prompt');
+ok(Object.entries(identities).every(([name,pronouns])=>agentDefaultPrompt(name).includes(`Gender identity: ${pronouns.startsWith('she')?'she':'he'}. Use ${pronouns} pronouns.`)),
+  'assigns each named agent the requested gender identity and pronouns in its system prompt');
+const legacyIdentityPrompt=name=>prompts.DEFAULT_SYS.replace('Gender identity: he. Use he/him pronouns. ','').replace(/Calcium/g,name)+
+  "\n\nYou are a live participant in Calcium's chat. Work on your assignment, use tell to communicate with the other agents, and call agent_done when you consider your work complete.";
+const oldAgent={name:'Hydrogen',systemPrompt:legacyIdentityPrompt('Hydrogen')},customAgent={name:'Indium',systemPrompt:'custom prompt'};
+let identitySaves=0;
+const migrateAgentIdentityPrompts=new Function('CH','agentDefaultPrompt','saveChat','DEFAULT_SYS',
+  src.slice(src.indexOf('function migrateAgentIdentityPrompts('),src.indexOf('function agentSystemText(',src.indexOf('function migrateAgentIdentityPrompts(')))+';return migrateAgentIdentityPrompts');
+migrateAgentIdentityPrompts({agents:[oldAgent,customAgent]},agentDefaultPrompt,()=>identitySaves++,prompts.DEFAULT_SYS);
+ok(oldAgent.systemPrompt===agentDefaultPrompt('Hydrogen')&&customAgent.systemPrompt==='custom prompt'&&identitySaves===1,
+  'updates saved default agent prompts without replacing custom system prompts');
+const iconStart=src.indexOf('function agentIcon('),iconEnd=src.indexOf('function renderBtw(',iconStart);
+const agentIcon=new Function(src.slice(iconStart,iconEnd)+';return agentIcon')();
+const agentIcons=['Hydrogen','Indium','Sulfur'].map(agentIcon);
+ok(agentIcons.every((icon,i)=>icon.includes(`agent-icon ${['hydrogen','indium','sulfur'][i]}`))&&new Set(agentIcons).size===3&&
+  ['hydrogenOrbit','indiumTurn','sulfurFlicker'].every(animation=>src.includes(`@keyframes ${animation}`)),
+  'renders unique animated icons for Hydrogen, Indium, and Sulfur');
+ok(src.includes('${agentIcon(agent.name)}<svg class="agent-ring')&&src.includes('@media(prefers-reduced-motion:reduce)'),
+  'shows each agent icon alongside its separate context ring and respects reduced-motion settings');
 const compactStart=src.indexOf('function scriptCompactSummary('),compactEnd=src.indexOf('async function compactChat(',compactStart);
 if(compactStart<0||compactEnd<0)throw Error('script compact helper not found');
 const scriptCompactSummary=new Function('msgs',src.slice(compactStart,compactEnd)+';return scriptCompactSummary(msgs)');
