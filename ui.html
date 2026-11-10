@@ -90,6 +90,10 @@ body.phone #chatGrip,body.phone #cFull{display:none}
 .msg{padding:8px 10px;border-radius:10px;max-width:94%;white-space:pre-wrap;word-break:break-word}
 .msg.user{align-self:flex-end;background:#243352;border:1px solid #2f4470}
 .msg.assistant{align-self:flex-start;background:var(--panel2);border:1px solid var(--line)}
+.msg.agent-hydrogen{background:#30203f;border-color:#8051a8}
+.msg.agent-indium{background:#183a39;border-color:#2b8a83}
+.msg.agent-sulfur{background:#40351d;border-color:#a47b28}
+.agent-sender{font-size:10px;font-weight:700;opacity:.8;margin-bottom:3px}
 .msg pre{background:#0a0c10;border:1px solid var(--line);border-radius:6px;padding:6px 8px;overflow:auto;margin:6px 0;white-space:pre}
 .msg code{font:12px ui-monospace,Menlo,monospace}
 .msg .think{color:var(--mut);font-size:12px;border-left:2px solid var(--line);padding-left:8px;margin-bottom:6px}
@@ -1030,6 +1034,8 @@ const NEW_OPEN=OLD_NEW_OPEN.replace("If asked which underlying model powers you,
   "Gender identity: he. Use he/him pronouns. If asked which underlying model powers you, say you don't know the details.");
 const DEFAULT_SYS=`${NEW_OPEN}
 
+Spawned helpers are separate models in this same chat. Their tools and abilities can differ from yours and from each other. A model with vision can inspect and understand images; vision does not mean it can generate or edit images. Do not promise image generation unless an available tool explicitly supports it.
+
 You can call tools:
 - web_search / fetch_url: look things up on the web (searches run from the user's computer). Use them for anything recent or that you are unsure of, read the best results with fetch_url, and mention the URLs you relied on.
 - list_files / read_file / search_files / write_file / edit_file / delete_file: work with files in the user's workspace folder ({{workspace}}). Read a file before editing it, and only change files when asked.
@@ -1045,7 +1051,7 @@ if(!Array.isArray(CH.agents))CH.agents=[];
 if(!Array.isArray(CH.agentNotes))CH.agentNotes=[];
 if(typeof CH.agentInterrupt!=='boolean')CH.agentInterrupt=false;
 CH.agents=CH.agents.filter(a=>a&&typeof a.id==='string'&&typeof a.name==='string'&&typeof a.model==='string'&&Array.isArray(a.messages));
-CH.agents.forEach(a=>{if(a.status==='working'||a.status==='starting')a.status='waiting';if(!Array.isArray(a.inbox))a.inbox=[];});
+CH.agents.forEach(a=>{if(a.status==='working'||a.status==='starting')a.status='waiting';if(!Array.isArray(a.inbox))a.inbox=[];if(!Array.isArray(a.sharedUpdates))a.sharedUpdates=[];});
 if(!['manual','semi','uncontrolled'].includes(CH.perm))CH.perm='semi';
 if(!['ai','script'].includes(CH.compactMode))CH.compactMode='ai';
 CH.tools={...TOOL_DEFAULTS,...(CH.tools||{})};
@@ -1459,7 +1465,8 @@ function calState(m,i){
   }
   return {live,label};
 }
-function whoHtml(m,i){const st=calState(m,i);return `<div class="who${st.live?' live':''}">${calLogo(st.live)}<span class="wn">${esc(st.label)}</span></div>`}
+function whoIcon(name,on){return name==='Calcium'?calLogo(on):agentIcon(name)}
+function whoHtml(m,i){const st=calState(m,i);return `<div class="who${st.live?' live':''}">${whoIcon(m.agentName||'Calcium',st.live)}<span class="wn">${esc(st.label)}</span></div>`}
 function whoSync(el,m,i){
   const w=el.querySelector('.who');if(!w)return;const st=calState(m,i);
   w.classList.toggle('live',st.live);w.querySelector('.cal')?.classList.toggle('on',st.live);
@@ -1689,15 +1696,23 @@ async function copyMsg(i,el){const ok=await copyText(CH.msgs[i]?.content||'');co
 function suggest(t){$('#cIn').value=t;grow();$('#cIn').focus()}
 function renderChat(){
   const log=$('#cLog');
-  log.innerHTML=CH.msgs.map((m,i)=>`<div class="msg ${m.role}${m.plan?' isplan':''}${m.auto?' auto':''}" data-i="${i}">${m.role==='assistant'?whoHtml(m,i)+'<div class="mbody">'+msgHtml(m,i)+'</div>':msgHtml(m,i)}</div>`).join('')||`<div class="mut small emptyhi">${calLogo(false)}<div style="color:var(--tx);font-weight:600;font-size:15px">Hi, I'm Calcium</div>Ask something — the gateway picks the least-busy node, or choose one under “Send to”.<br>Tools, files and the system prompt live under 🗂 Workspace.<div class="sugg">${['What can you do in my workspace?','List the files in my workspace','Search the web for the latest llama.cpp release'].map(t=>`<button onclick="suggest(this.textContent)">${esc(t)}</button>`).join('')}</div></div>`;
+  log.innerHTML=CH.msgs.map((m,i)=>`<div class="msg ${m.role}${agentBubbleClass(m.agentName)}${m.plan?' isplan':''}${m.auto?' auto':''}" data-i="${i}">${m.role==='assistant'?whoHtml(m,i)+'<div class="mbody">'+msgHtml(m,i)+'</div>':(m.agentName?`<div class="agent-sender">${esc(m.agentName)}</div>`:'')+msgHtml(m,i)}</div>`).join('')||`<div class="mut small emptyhi">${calLogo(false)}<div style="color:var(--tx);font-weight:600;font-size:15px">Hi, I'm Calcium</div>Ask something — the gateway picks the least-busy node, or choose one under “Send to”.<br>Tools, files and the system prompt live under 🗂 Workspace.<div class="sugg">${['What can you do in my workspace?','List the files in your workspace','Search the web for the latest llama.cpp release'].map(t=>`<button onclick="suggest(this.textContent)">${esc(t)}</button>`).join('')}</div></div>`;
   log.scrollTop=log.scrollHeight;renderBtw();ctxSoon();
 }
+function agentBubbleClass(name){return name==='Hydrogen'?' agent-hydrogen':name==='Indium'?' agent-indium':name==='Sulfur'?' agent-sulfur':''}
 function agentCtxCapacity(agent){
   const node=NODES.find(n=>n.name===agent.node),cfg=node?.info?.server?.config||{},parallel=Math.max(1,+cfg.parallel||1);
   return +cfg.ctx_size?{tokens:Math.floor(+cfg.ctx_size/parallel),name:agent.node,par:parallel,size:+cfg.ctx_size}:null;
 }
+function agentUsesCompactMode(agent){const cap=agentCtxCapacity(agent);return !!cap&&cap.tokens<8192}
+function agentToolDefs(agent){
+  const defs=activeTools(agent.model,agent.node,agent.id);
+  if(!agentUsesCompactMode(agent))return defs;
+  const keep=new Set(['list_files','read_file','search_files','write_file','edit_file','delete_file','view_image','calculate','tell','interrupt','status','agent_done']);
+  return defs.filter(t=>keep.has(t.function.name));
+}
 function agentCtxState(agent){
-  const defs=activeTools(agent.model,agent.node,agent.id),e=ctxEstimate(agentApiMessages(agent),defs);
+  const defs=agentToolDefs(agent),e=ctxEstimate(agentApiMessages(agent),defs);
   const cap=agentCtxCapacity(agent);
   return {...ctxSegments(e,1,cap),cap};
 }
@@ -1711,14 +1726,14 @@ function renderAgents(){
   box.innerHTML=CH.agents.map(agent=>{
     const s=agentCtxState(agent),C=2*Math.PI*9,percent=Math.round(s.pct);
     const history=agent.messages.filter(m=>m.role!=='system').slice(-24).map(m=>{
-      const label=m.role==='assistant'?agent.name:m.role==='tool'?'tool':m.role==='user'?'message':m.role;
+      const label=m.agentName|| (m.role==='assistant'?agent.name:m.role==='tool'?'tool':m.role==='user'?'message':m.role);
       const body=m.tool_calls?.length?m.tool_calls.map(tc=>`${tc.function.name}(${short(tc.function.arguments||'',180)})`).join('\n'):short(m.content||'',1200);
       return `<div class="agent-line ${esc(m.role)}"><b>${esc(label)}</b>${esc(body)}</div>`;
     }).join('');
     box.querySelectorAll('.agent-card').forEach(card=>{if(expanded.has(card.dataset.agent))card.querySelector('.agent-detail').open=true});
     return `<div class="agent-card" data-agent="${esc(agent.id)}">
       <div class="agent-head">${agentIcon(agent.name)}<svg class="agent-ring ${s.level}" viewBox="0 0 24 24" title="${percent}% context · ${fmtTok(s.used)} / ${fmtTok(s.size)} tokens"><circle class="tr" cx="12" cy="12" r="9"></circle><circle class="arc" cx="12" cy="12" r="9" transform="rotate(-90 12 12)" stroke-dasharray="${(s.pct/100*C).toFixed(2)} ${C.toFixed(2)}"></circle></svg>
-        <b>${esc(agent.name)}</b><span class="agent-meta">${esc(agent.model)} · ${esc(agent.status||'waiting')}${agent.last?` · ${esc(short(agent.last,90))}`:''}</span>
+        <b>${esc(agent.name)}</b><span class="agent-meta">${esc(agent.model)}${agentUsesCompactMode(agent)?' · compact mode':''} · ${esc(agent.status||'waiting')}${agent.last?` · ${esc(short(agent.last,90))}`:''}</span>
         <button data-agent-action="interrupt" data-id="${esc(agent.id)}" title="Interrupt and redirect this agent">Interrupt</button><button data-agent-action="despawn" data-id="${esc(agent.id)}" title="Remove this agent">×</button></div>
       <details class="agent-detail"><summary>Conversation and system prompt</summary>
         <div class="agent-history">${history||'<div class="mut small">No messages yet.</div>'}</div>
@@ -1814,7 +1829,7 @@ function apiMessages(extraUser,noImages,model=CH.model,route=CH.route){
   const msgs=src.map(m=>m.role==='tool'?{role:'tool',tool_call_id:m.tool_call_id,content:m.image&&vis&&IMGS[m.image]?[{type:'text',text:m.content},{type:'image_url',image_url:{url:IMGS[m.image]}}]:m.content+(m.image&&!vis?'\n[runweb screenshot omitted: this model is not vision-capable]':'')}
     :m.role==='assistant'&&m.tool_calls?.length?{role:'assistant',content:m.content||'',tool_calls:m.tool_calls}
     :m.role==='user'&&m.images?.length?{role:'user',content:userContent(m,vis)}
-    :{role:m.role,content:m.content});
+    :{role:m.role,content:m.agentName?`[${m.agentName}]: ${m.content||''}`:m.content});
   if(extraUser)msgs.push({role:'user',content:extraUser});
   return [...(sys?[{role:'system',content:sys}]:[]),...msgs];
 }
@@ -1901,8 +1916,8 @@ function notice(text){CH.msgs.push({role:'assistant',local:true,content:text});s
 function compactTranscript(msgs,budget){
   const parts=[];
   for(const m of msgs){
-    if(m.role==='user')parts.push('USER: '+short(m.content||'',3000)+(m.images?.length?` [${m.images.length} image(s)]`:''));
-    else if(m.role==='assistant'){let t='ASSISTANT: '+short(m.content||'',3000);(m.tool_calls||[]).forEach(tc=>{t+=`\n  [tool call ${tc.function.name}(${short(tc.function.arguments||'',300)})]`});if(m.error)t+=' [error: '+short(m.error,200)+']';parts.push(t)}
+    if(m.role==='user')parts.push((m.agentName?m.agentName.toUpperCase():'USER')+': '+short(m.content||'',3000)+(m.images?.length?` [${m.images.length} image(s)]`:''));
+    else if(m.role==='assistant'){let t=(m.agentName?m.agentName.toUpperCase():'ASSISTANT')+': '+short(m.content||'',3000);(m.tool_calls||[]).forEach(tc=>{t+=`\n  [tool call ${tc.function.name}(${short(tc.function.arguments||'',300)})]`});if(m.error)t+=' [error: '+short(m.error,200)+']';parts.push(t)}
     else if(m.role==='tool')parts.push('  TOOL RESULT ('+(m.name||'')+'): '+short(m.content||'',700));
   }
   let t=parts.join('\n');
@@ -2112,7 +2127,8 @@ async function runFileSlash(cmd,path){
       content=`View and describe this workspace image: ${result.path||path}`;
       images=[{id,name:result.path||path}];
     }
-    CH.msgs.push({role:'user',content,...(images?{images}:{})});
+    const message={role:'user',content,...(images?{images}:{})};
+    CH.msgs.push(message);queueSharedChatMessage(message);
     saveChat();renderChat();await chatSend(true);
   }catch(e){notice(`/${cmd} failed: ${e.message}`)}
 }
@@ -2266,31 +2282,48 @@ async function runTool(tc,context={}){
 function agentDefaultPrompt(name){
   const identity=name==='Hydrogen'||name==='Sulfur'?'Gender identity: she. Use she/her pronouns.':'Gender identity: he. Use he/him pronouns.';
   const base=DEFAULT_SYS.replace(/Calcium/g,name).replace('Gender identity: he. Use he/him pronouns.',identity);
-  return `${base}\n\nYou are a live participant in Calcium's chat. Work on your assignment, use tell to communicate with the other agents, and call agent_done when you consider your work complete.`;
+  return `${base}\n\nYou are a live participant in Calcium's chat. Work on your assignment, use enabled tell tools to communicate with the other agents, and call agent_done when you consider your work complete.`;
+}
+function compactAgentDefaultPrompt(name){
+  const identity=name==='Hydrogen'||name==='Sulfur'?'she/her':'he/him';
+  return `You are ${name}, an XLABS AI helper in Calcium's shared chat. Use ${identity} pronouns. You are a separately spawned model; your tools and abilities may differ from Calcium and other helpers. Vision means you can inspect images, not generate or edit them; do not claim image generation. Focus on your assignment, keep replies concise, use enabled tell/status/interrupt tools to coordinate, and call agent_done when finished.`;
 }
 function migrateAgentIdentityPrompts(){
   const oldSuffix="\n\nYou are a live participant in Calcium's chat. Work on your assignment, use tell to communicate with the other agents, and call agent_done when you consider your work complete.";
+  const helperNote="Spawned helpers are separate models in this same chat. Their tools and abilities can differ from yours and from each other. A model with vision can inspect and understand images; vision does not mean it can generate or edit images. Do not promise image generation unless an available tool explicitly supports it.\n\n";
+  const legacyDefault=DEFAULT_SYS.replace(helperNote,'');
   let changed=false;
   CH.agents.forEach(agent=>{
-    const oldPrompt=DEFAULT_SYS.replace('Gender identity: he. Use he/him pronouns. ','').replace(/Calcium/g,agent.name)+oldSuffix;
-    if(agent.systemPrompt===oldPrompt){agent.systemPrompt=agentDefaultPrompt(agent.name);changed=true}
+    const identity=agent.name==='Hydrogen'||agent.name==='Sulfur'?'Gender identity: she. Use she/her pronouns.':'Gender identity: he. Use he/him pronouns.';
+    const oldPrompts=[
+      legacyDefault.replace(/Calcium/g,agent.name).replace('Gender identity: he. Use he/him pronouns.',identity)+oldSuffix,
+      legacyDefault.replace('Gender identity: he. Use he/him pronouns. ','').replace(/Calcium/g,agent.name)+oldSuffix
+    ];
+    if(oldPrompts.includes(agent.systemPrompt)){agent.systemPrompt=agentDefaultPrompt(agent.name);changed=true}
   });
   if(changed)saveChat();
 }
 migrateAgentIdentityPrompts();
 function agentSystemText(agent){
-  return `${agent.systemPrompt||agentDefaultPrompt(agent.name)}${toolNotes(agent.model,agent.node,agent.id)}`;
+  const compact=agentUsesCompactMode(agent),isDefault=!agent.systemPrompt||agent.systemPrompt===agentDefaultPrompt(agent.name);
+  const prompt=compact&&isDefault?compactAgentDefaultPrompt(agent.name):agent.systemPrompt||agentDefaultPrompt(agent.name);
+  const capabilityNote=/vision does not mean it can generate or edit images|not generate or edit them/i.test(prompt)?'':
+    "\n\nYou are a separate spawned helper model in Calcium's shared chat. Your tools and abilities may differ from Calcium and other helpers. Vision enables image inspection only, not image generation or editing.";
+  const compactNote=compact&&!isDefault?'\n\nCompact-context mode: keep replies concise.':'';
+  return `${prompt}${capabilityNote}${compactNote}${toolNotes(agent.model,agent.node,agent.id,compact)}`;
 }
 function agentApiMessages(agent){
   const vision=capsFor(agent.model,agent.node).vision;
   return agent.messages.map(m=>{
+    if(m.role==='user'&&m.agentName&&!m.images?.length)return {...m,content:`[${m.agentName}]: ${m.content||''}`};
+    if(m.role==='user'&&m.images?.length)return {...m,content:userContent(m,vision)};
     if(m.role!=='tool'||!m.image)return m;
     if(vision&&IMGS[m.image])return {...m,content:[{type:'text',text:m.content},{type:'image_url',image_url:{url:IMGS[m.image]}}]};
     return {...m,content:(m.content||'')+'\n[image omitted: this model cannot inspect images or the image is not available]'};
   });
 }
 function compactAgentHistory(agent){
-  const defs=activeTools(agent.model,agent.node,agent.id),cap=agentCtxCapacity(agent),source=agent.messages;
+  const defs=agentToolDefs(agent),cap=agentCtxCapacity(agent),source=agent.messages;
   if(!cap||ctxEstimate(agentApiMessages(agent),defs).total<cap.tokens*.88)return false;
   let cut=Math.max(2,source.length-12);
   while(cut<source.length&&source[cut]?.role!=='user')cut++;
@@ -2305,16 +2338,16 @@ function compactAgentHistory(agent){
   saveChat();renderAgents();
   return true;
 }
-function agentSeedMessages(task){
+function agentSeedMessages(task,compact=false){
   const history=CH.msgs.filter(m=>!m.local&&!m.streaming&&m.role!=='compact'&&m.role!=='orchestra');
-  const context=compactTranscript(history.slice(-20),6500);
-  const images=chatImageRefs().map((x,i)=>`${i+1}: ${x.name}`).join('\n');
+  const context=compactTranscript(history.slice(compact?-8:-20),compact?2600:6500);
+  const images=chatImageRefs().slice(0,compact?4:undefined).map((x,i)=>`${i+1}: ${x.name}`).join('\n');
   return [{role:'system',content:''},{role:'user',content:
     `You are joining this conversation as a live agent. Read the context and then work on your assignment.\n\n`+
     (CH.summary?`Earlier chat summary:\n${CH.summary}\n\n`:'')+
     `Recent chat:\n${context||'(no earlier messages)'}\n\n`+
     (images?`Available chat image attachments (use view_image with the number if useful):\n${images}\n\n`:'')+
-    `Your assignment:\n${task}`}];
+    `Your assignment:\n${compact?short(task,2200):task}`}];
 }
 function spawnLiveAgent(model,task){
   task=String(task||'').trim().slice(0,8000);
@@ -2325,7 +2358,7 @@ function spawnLiveAgent(model,task){
   const slot=agentSpawnSlots().find(x=>x.model===model);
   if(!slot)return {error:'no ready free node is serving the selected model'};
   const agent={id:`agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`,name,model,node:slot.node,
-    status:'starting',task,last:'',systemPrompt:agentDefaultPrompt(name),messages:agentSeedMessages(task),inbox:[],finishRequested:false};
+    status:'starting',task,last:'',systemPrompt:agentDefaultPrompt(name),messages:agentSeedMessages(task,agentUsesCompactMode({node:slot.node})),inbox:[],sharedUpdates:[],finishRequested:false};
   agent.messages[0].content=agentSystemText(agent);
   CH.agents.push(agent);saveChat();renderAgents();
   processLiveAgent(agent.id);
@@ -2337,7 +2370,10 @@ async function messageLiveAgent(agent,text,interrupt=false,sender='Calcium'){
   if(!CH.agents.includes(agent))return {error:'that agent is no longer active'};
   if(agent.inbox.length>=20)return {error:`${agent.name}'s message queue is full`};
   const wasProcessing=agentProcessing.has(agent.id),didInterrupt=!!(interrupt&&agentRuns.has(agent.id));
-  agent.inbox.push({sender:String(sender||'Calcium').slice(0,40),text});
+  const source=String(sender||'Calcium').slice(0,40);
+  agent.inbox.push({sender:source,text});
+  recordAgentMessage({role:'user',agentName:String(sender||'Calcium'),content:`To ${agent.name}: ${text}`});
+  queueSharedChatMessage({role:'user',agentName:source,content:text},agent.name);
   if(didInterrupt)agentRuns.get(agent.id)?.abort();
   if(!wasProcessing)processLiveAgent(agent.id);
   agent.status=agentProcessing.has(agent.id)?(didInterrupt?'interrupted':'working'):'queued';
@@ -2356,7 +2392,7 @@ function finishLiveAgent(agent,answer){
   if(!CH.agents.includes(agent))return;
   agentRuns.get(agent.id)?.abort();
   CH.agents=CH.agents.filter(a=>a!==agent);
-  recordAgentMessage({role:'assistant',agentName:agent.name,node:agent.node,content:`${answer||agent.last||'Assignment complete.'}`});
+  if(!answer&&!agent.last)recordAgentMessage({role:'assistant',agentName:agent.name,node:agent.node,content:'Assignment complete.'});
   saveChat();renderAgents();renderChat();
 }
 function recordAgentMessage(message){
@@ -2368,6 +2404,7 @@ function messageCalcium(text,sender,interrupt=false){
   if(!text)return {error:'message cannot be empty'};
   const wasBusy=!!chatAbort;
   recordAgentMessage({role:'user',agentName:sender,content:`Message from ${sender}:\n${text}`});
+  queueSharedChatMessage({role:'user',agentName:sender,content:text},sender);
   if(interrupt){
     if(wasBusy){CH.agentInterrupt=true;chatAbort.abort()}
     else setTimeout(()=>{if(!chatAbort)chatSend(true)},0);
@@ -2379,6 +2416,22 @@ function flushAgentMessages(){
   if(!CH.agentNotes.length)return;
   CH.msgs.push(...CH.agentNotes);CH.agentNotes=[];renderChat();
 }
+function queueSharedChatMessage(message,excludeName=''){
+  const content=String(message.content||'').trim();
+  if(!content)return;
+  CH.agents.slice().forEach(agent=>{
+    if(agent.name===excludeName||agent.name===message.agentName)return;
+    if(agent.inbox.length>=20){agent.last='Inbox full; a shared chat update was skipped.';saveChat();renderAgents();return}
+    agent.inbox.push({sender:message.agentName||(message.role==='user'?'User':'Calcium'),text:content,...(message.images?.length?{images:message.images}:{})});
+    if(!agentProcessing.has(agent.id))processLiveAgent(agent.id);
+  });
+}
+function shareAgentReply(message,excludeName){
+  CH.agents.filter(agent=>agent.name!==excludeName).forEach(agent=>{
+    agent.sharedUpdates.push({agentName:message.agentName,content:message.content});
+  });
+  saveChat();renderAgents();
+}
 const agentProcessing=new Set();
 async function processLiveAgent(id){
   const agent=CH.agents.find(a=>a.id===id);
@@ -2388,18 +2441,23 @@ async function processLiveAgent(id){
   try{
     if(!TOOLINFO)await loadTools();
     if(!TOOLINFO){agent.status='error';agent.last='Could not load tools from the controller; retry after reconnecting.';return}
-    if(agent.messages.some(m=>m.image))await loadMsgImages();
+    if(agent.messages.some(m=>m.image||m.images?.length))await loadMsgImages();
     while(CH.agents.includes(agent)&&step<clamp(+CH.steps||10,1,40)){
+      while(agent.sharedUpdates.length){
+        const update=agent.sharedUpdates.shift();
+        agent.messages.push({role:'user',agentName:update.agentName,content:update.content});
+      }
       if(agent.inbox.length){
         const note=agent.inbox.shift();
-        agent.messages.push({role:'user',content:`Message from ${note.sender}:\n${note.text}`});
+        agent.messages.push({role:'user',content:`Message from ${note.sender}:\n${note.text}`,...(note.images?.length?{images:note.images}:{})});
+        if(note.images?.length)await loadMsgImages();
       }
       agent.messages[0]={role:'system',content:agentSystemText(agent)};
       compactAgentHistory(agent);
       const ctl=new AbortController();agentRuns.set(id,ctl);
       let out;
       try{
-        out=await llmCall({messages:agentApiMessages(agent),tools:activeTools(agent.model,agent.node,agent.id),route:agent.node,model:agent.model,signal:ctl.signal});
+        out=await llmCall({messages:agentApiMessages(agent),tools:agentToolDefs(agent),route:agent.node,model:agent.model,signal:ctl.signal});
       }catch(e){
             if(e.name==='AbortError'&&agent.inbox.length){continue}
         if(e.name==='AbortError'){agent.status='waiting';agent.last='Interrupted';break}
@@ -2427,6 +2485,10 @@ async function processLiveAgent(id){
       const answer=(out.content||out.reasoning||'').trim();
       if(answer)agent.messages.push({role:'assistant',content:answer});
       agent.last=short(answer||'No text response',160);
+      if(answer){
+        const shared={role:'assistant',agentName:agent.name,node:agent.node,content:answer};
+        recordAgentMessage(shared);shareAgentReply(shared,agent.name);
+      }
       saveChat();renderAgents();step++;
       if(agent.finishRequested){finishLiveAgent(agent,answer);return}
       if(agent.inbox.length)continue;
@@ -2686,10 +2748,12 @@ function dispatchQueuedMessage(){
     return;
   }
   CH.queue.shift();
-  CH.msgs.push({role:'user',content:next.text||'',...(next.images?.length?{images:next.images}:{})});
+  const message={role:'user',content:next.text||'',...(next.images?.length?{images:next.images}:{})};
+  CH.msgs.push(message);queueSharedChatMessage(message);
   renderChatQueue();saveChat();chatSend(true);
 }
 async function chatSend(regen){
+  const turnStart=CH.msgs.length;
   if(!regen){
     const text=$('#cIn').value.trim(),command=/^\/(compact|clear|models|read|view|schedule)(?:\s+([\s\S]*))?$/i.exec(text);
     if(command&&(!chatAbort||['models','read','view','schedule'].includes(command[1].toLowerCase()))){
@@ -2703,7 +2767,8 @@ async function chatSend(regen){
     if(dispatchBtw(t))return;
     if(PEND.length&&!capsNow().vision){alert('The selected model can\'t read images — remove the picture(s) or pick a vision model.');return}
     const pm=planMsg();if(pm)pm.plan='revised';     // typing instead of clicking = feedback on the pending plan
-    CH.msgs.push({role:'user',content:t,...(PEND.length?{images:PEND}:{})});PEND=[];renderPend();$('#cIn').value='';grow();
+    const message={role:'user',content:t,...(PEND.length?{images:PEND}:{})};
+    CH.msgs.push(message);queueSharedChatMessage(message);PEND=[];renderPend();$('#cIn').value='';grow();
   }
   if(!TOOLINFO)await loadTools();
   if(CH.mode==='ask')await loadAskTree();
@@ -2717,6 +2782,7 @@ async function chatSend(regen){
   }finally{
     if(ctl.cleared)wipeChat();else repairHistory();
     chatAbort=null;flushAgentMessages();const resume=CH.agentInterrupt;CH.agentInterrupt=false;
+    CH.msgs.slice(turnStart).filter(m=>m.role==='assistant'&&!m.agentName&&!m.streaming&&!m.tool_calls?.length&&m.content?.trim()).forEach(m=>queueSharedChatMessage(m));
     $('#cSend').textContent='Send';syncBusy();saveChat();renderChat();
     if(resume)setTimeout(()=>{if(!chatAbort)chatSend(true)},0);
     else if(CH.queue.length)setTimeout(dispatchQueuedMessage,0);
@@ -2758,14 +2824,25 @@ function setPerm(v){
 $('#cPerm').value=$('#wPerm').value=CH.perm;
 $('#cPerm').onchange=()=>setPerm($('#cPerm').value);$('#wPerm').onchange=()=>setPerm($('#wPerm').value);
 $('#cSub').oninput=()=>{CH.maxSub=clamp(+$('#cSub').value||4,1,12);saveChat()};
-function toolNotes(model=CH.model,route=CH.route,agentId=null){
-  const names=activeTools(model,route,agentId).map(t=>t.function.name),L=[];
+function toolNotes(model=CH.model,route=CH.route,agentId=null,compact=false){
+  let tools=activeTools(model,route,agentId);
+  if(compact){
+    const keep=new Set(['list_files','read_file','search_files','write_file','edit_file','delete_file','view_image','calculate','tell','interrupt','status','agent_done']);
+    tools=tools.filter(t=>keep.has(t.function.name));
+    const brief={list_files:'list workspace files',read_file:'read a workspace file',search_files:'search workspace files',
+      write_file:'create a workspace file',edit_file:'edit a workspace file',delete_file:'delete a workspace file',
+      view_image:'inspect (not generate) an image',calculate:'calculate',tell:'message an agent without interrupting',
+      interrupt:'redirect an agent immediately',status:'check agent status',agent_done:'finish your assignment'};
+    const notes=tools.map(t=>`- ${t.function.name}: ${brief[t.function.name]}.`);
+    return notes.length?'\n\nAvailable tools:\n'+notes.join('\n'):'';
+  }
+  const names=tools.map(t=>t.function.name),L=[];
   if(names.includes('calculate'))L.push('- calculate: an exact, safe calculator. Use it for any non-trivial arithmetic or maths (big numbers, fractions, matrices, statistics, primes, integrals, derivatives, solving equations) instead of working it out in your head, and report what it returns.');
   if(names.includes('convert_units'))L.push('- convert_units: converts between units (length, mass, temperature, data size ...).');
   if(names.includes('question'))L.push('- question: ask the user a question when you need a decision or information you cannot find yourself. Give 2-6 short options when there are sensible choices (the user can also type their own answer). Ask one question at a time and never ask what you can look up or decide yourself.');
   if(names.includes('task'))L.push('- task: a visible to-do list for the user. For work with several steps, add the tasks first (action add), set a task to doing when you start it and to done when it is finished (action set), and remove tasks that no longer apply (action remove).'+(CH.tasks?.length?'\n  Current tasks:\n'+CH.tasks.map(t=>`  #${t.id} [${t.status}] ${t.title}`).join('\n'):''));
   if(names.includes('date_time'))L.push('- date_time: the current time in any time zone, time zone conversion and date arithmetic.');
-  if(names.includes('spawn'))L.push('- spawn: use mode "agent" to bring a persistent, named model into this chat; give it a clear initial task. Use mode "parallel" for independent one-shot tasks or "debate" for one-shot critique rounds. Select a model from the tool schema.');
+  if(names.includes('spawn'))L.push('- spawn: use mode "agent" to add a persistent helper model to this same chat, or "parallel"/"debate" for one-shot helpers. Helpers use their selected model and may have different tools or abilities; vision means they can inspect images, not generate or edit them. Select a model from the tool schema.');
   if(names.includes('tell'))L.push('- tell: send a non-interrupting message to Calcium or another live agent; it waits until a busy recipient finishes its current reply.');
   if(names.includes('interrupt'))L.push('- interrupt: stop a live agent reply and redirect it immediately. You may also interrupt Calcium; it will receive your message and restart on it.');
   if(names.includes('status'))L.push('- status: read agent state without sending a message or interrupting its work.');
@@ -2908,7 +2985,7 @@ const CONDUCTOR_SYS=n=>`You are the conductor of an orchestra of AI workers that
 Reply with ONLY JSON, no other text: {"subtasks":[{"title":"short title","prompt":"complete instructions for the worker"}]}`;
 const WORKER_NOTE=`
 
-You are one worker in a larger job, running on your own machine. Do only the subtask you are given, use tools when they help, and finish with a concise, self-contained result (mention any file paths you created or changed).`;
+You are a spawned helper model in Calcium's shared chat, running on a worker node. Your tools and abilities may differ from Calcium's and from other helpers'. Do only the subtask you are given, use tools when they help, and finish with a concise, self-contained result (mention any file paths you created or changed). Vision support means image inspection only; it does not provide image generation or editing. Do not claim that it does.`;
 function parseSubtasks(text,max){
   const t=(text||'').replace(/```(?:json)?/gi,''),a=t.indexOf('{'),b=t.lastIndexOf('}');
   try{return (JSON.parse(t.slice(a,b+1)).subtasks||[]).map(x=>({title:String(x.title||'Subtask').slice(0,80),prompt:String(x.prompt||x.task||'')})).filter(x=>x.prompt.trim()).slice(0,max)}catch(e){return []}

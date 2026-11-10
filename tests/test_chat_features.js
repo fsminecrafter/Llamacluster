@@ -15,14 +15,17 @@ const identities={Calcium:'he/him',Hydrogen:'she/her',Indium:'he/him',Sulfur:'sh
 ok(prompts.NEW_OPEN.includes('Gender identity: he')&&prompts.NEW_OPEN.includes('he/him'),'adds Calcium’s he/him identity to the primary system prompt');
 ok(Object.entries(identities).every(([name,pronouns])=>agentDefaultPrompt(name).includes(`Gender identity: ${pronouns.startsWith('she')?'she':'he'}. Use ${pronouns} pronouns.`)),
   'assigns each named agent the requested gender identity and pronouns in its system prompt');
-const legacyIdentityPrompt=name=>prompts.DEFAULT_SYS.replace('Gender identity: he. Use he/him pronouns. ','').replace(/Calcium/g,name)+
+const legacyIdentityPrompt=name=>prompts.DEFAULT_SYS.replace(/Spawned helpers are separate models[\s\S]*?supports it\.\n\n/,'').replace('Gender identity: he. Use he/him pronouns. ','').replace(/Calcium/g,name)+
   "\n\nYou are a live participant in Calcium's chat. Work on your assignment, use tell to communicate with the other agents, and call agent_done when you consider your work complete.";
-const oldAgent={name:'Hydrogen',systemPrompt:legacyIdentityPrompt('Hydrogen')},customAgent={name:'Indium',systemPrompt:'custom prompt'};
+const oldAgent={name:'Hydrogen',systemPrompt:legacyIdentityPrompt('Hydrogen')};
+const oldIdentityAgent={name:'Sulfur',systemPrompt:prompts.DEFAULT_SYS.replace(/Spawned helpers are separate models[\s\S]*?supports it\.\n\n/,'').replace(/Calcium/g,'Sulfur').replace('Gender identity: he. Use he/him pronouns.','Gender identity: she. Use she/her pronouns.')+
+  "\n\nYou are a live participant in Calcium's chat. Work on your assignment, use tell to communicate with the other agents, and call agent_done when you consider your work complete."};
+const customAgent={name:'Indium',systemPrompt:'custom prompt'};
 let identitySaves=0;
 const migrateAgentIdentityPrompts=new Function('CH','agentDefaultPrompt','saveChat','DEFAULT_SYS',
   src.slice(src.indexOf('function migrateAgentIdentityPrompts('),src.indexOf('function agentSystemText(',src.indexOf('function migrateAgentIdentityPrompts(')))+';return migrateAgentIdentityPrompts');
-migrateAgentIdentityPrompts({agents:[oldAgent,customAgent]},agentDefaultPrompt,()=>identitySaves++,prompts.DEFAULT_SYS);
-ok(oldAgent.systemPrompt===agentDefaultPrompt('Hydrogen')&&customAgent.systemPrompt==='custom prompt'&&identitySaves===1,
+migrateAgentIdentityPrompts({agents:[oldAgent,oldIdentityAgent,customAgent]},agentDefaultPrompt,()=>identitySaves++,prompts.DEFAULT_SYS);
+ok(oldAgent.systemPrompt===agentDefaultPrompt('Hydrogen')&&oldIdentityAgent.systemPrompt===agentDefaultPrompt('Sulfur')&&customAgent.systemPrompt==='custom prompt'&&identitySaves===1,
   'updates saved default agent prompts without replacing custom system prompts');
 const iconStart=src.indexOf('function agentIcon('),iconEnd=src.indexOf('function renderBtw(',iconStart);
 const agentIcon=new Function(src.slice(iconStart,iconEnd)+';return agentIcon')();
@@ -30,6 +33,41 @@ const agentIcons=['Hydrogen','Indium','Sulfur'].map(agentIcon);
 ok(agentIcons.every((icon,i)=>icon.includes(`agent-icon ${['hydrogen','indium','sulfur'][i]}`))&&new Set(agentIcons).size===3&&
   ['hydrogenOrbit','indiumTurn','sulfurFlicker'].every(animation=>src.includes(`@keyframes ${animation}`)),
   'renders unique animated icons for Hydrogen, Indium, and Sulfur');
+const compactPromptStart=src.indexOf('function compactAgentDefaultPrompt('),compactPromptEnd=src.indexOf('function migrateAgentIdentityPrompts(',compactPromptStart);
+const compactAgentDefaultPrompt=new Function(src.slice(compactPromptStart,compactPromptEnd)+';return compactAgentDefaultPrompt')();
+ok(['Hydrogen','Indium','Sulfur'].every(name=>compactAgentDefaultPrompt(name).length<500&&compactAgentDefaultPrompt(name).includes('not generate or edit them')),
+  'uses a short helper prompt that clearly limits vision to image understanding');
+const capacityStart=src.indexOf('function agentCtxCapacity('),capacityEnd=src.indexOf('function agentToolDefs(',capacityStart);
+const capacityFns=new Function('NODES',src.slice(capacityStart,capacityEnd)+';return {agentCtxCapacity,agentUsesCompactMode}')([
+  {name:'small',info:{server:{config:{ctx_size:8192,parallel:2}}}},
+  {name:'large',info:{server:{config:{ctx_size:16384,parallel:1}}}}
+]);
+ok(capacityFns.agentUsesCompactMode({node:'small'})&& !capacityFns.agentUsesCompactMode({node:'large'}),
+  'enables compact mode when the agent slot has less than 8k context tokens');
+const agentToolsStart=src.indexOf('function agentToolDefs('),agentToolsEnd=src.indexOf('function agentCtxState(',agentToolsStart);
+const makeAgentToolDefs=new Function('activeTools','agentUsesCompactMode',
+  src.slice(agentToolsStart,agentToolsEnd)+';return agentToolDefs');
+const allAgentTools=['read_file','write_file','search_files','web_search','fetch_url','exec_command','view_image','tell','interrupt','status','spawn','agent_done']
+  .map(name=>({function:{name}}));
+const limitedTools=makeAgentToolDefs(()=>allAgentTools,()=>true)({model:'small'});
+ok(limitedTools.map(t=>t.function.name).join(',')==='read_file,write_file,search_files,view_image,tell,interrupt,status,agent_done',
+  'keeps core workspace, image-inspection, and agent-communication tools for compact mode');
+const sharedStart=src.indexOf('function queueSharedChatMessage('),sharedEnd=src.indexOf('const agentProcessing=',sharedStart);
+const sharedChat={agents:[{id:'h',name:'Hydrogen',inbox:[],messages:[],sharedUpdates:[]},{id:'i',name:'Indium',inbox:[],messages:[],sharedUpdates:[]} ]},started=[];
+const queueSharedChatMessage=new Function('CH','agentProcessing','processLiveAgent',
+  src.slice(sharedStart,sharedEnd)+';return queueSharedChatMessage')(sharedChat,new Set(),id=>started.push(id));
+queueSharedChatMessage({role:'user',content:'new user turn',images:[{id:'image-1'}]});
+ok(sharedChat.agents.every(a=>a.inbox[0]?.text==='new user turn'&&a.inbox[0]?.images?.[0].id==='image-1')&&started.length===2,
+  'shares new user turns and image attachments with every live agent');
+const shareReplyStart=src.indexOf('function shareAgentReply('),shareReplyEnd=src.indexOf('const agentProcessing=',shareReplyStart);
+const shareReply=new Function('CH','saveChat','renderAgents',
+  src.slice(shareReplyStart,shareReplyEnd)+';return shareAgentReply')(sharedChat,()=>{},()=>{});
+shareReply({role:'assistant',agentName:'Hydrogen',content:'helper reply'},'Hydrogen');
+ok(sharedChat.agents[0].sharedUpdates.length===0&&sharedChat.agents[1].sharedUpdates[0]?.agentName==='Hydrogen'&&sharedChat.agents[1].inbox.length===1,
+  'shares agent replies with peer histories without triggering an unsolicited reply');
+ok(src.includes('agentBubbleClass(m.agentName)')&&src.includes('.msg.agent-hydrogen')&&src.includes('.msg.agent-indium')&&src.includes('.msg.agent-sulfur')&&
+  src.includes("recordAgentMessage(shared);shareAgentReply(shared,agent.name)"),
+  'shows each agent reply in the main chat with an agent-specific bubble color');
 ok(src.includes('${agentIcon(agent.name)}<svg class="agent-ring')&&src.includes('@media(prefers-reduced-motion:reduce)'),
   'shows each agent icon alongside its separate context ring and respects reduced-motion settings');
 const compactStart=src.indexOf('function scriptCompactSummary('),compactEnd=src.indexOf('async function compactChat(',compactStart);
@@ -116,29 +154,30 @@ const toAgentApi=new Function('capsFor','IMGS',src.slice(agentApiStart,agentApiE
 const multimodalHistory=toAgentApi(()=>({vision:true}),{img:'data:image/png;base64,abc'})({model:'vision-model',node:'node-a',messages:[{role:'tool',content:'image result',image:'img'}]});
 ok(Array.isArray(multimodalHistory[0].content)&&multimodalHistory[0].content[1].type==='image_url','sends tool-viewed images into a spawned vision agent history');
 const spawnLiveStart=src.indexOf('function spawnLiveAgent('),spawnLiveEnd=src.indexOf('async function messageLiveAgent(',spawnLiveStart);
-const makeSpawnLive=new Function('CH','AGENT_NAMES','agentSpawnSlots','agentDefaultPrompt','agentSeedMessages','agentSystemText','saveChat','renderAgents','processLiveAgent',
+const makeSpawnLive=new Function('CH','AGENT_NAMES','agentSpawnSlots','agentDefaultPrompt','agentSeedMessages','agentSystemText','agentUsesCompactMode','saveChat','renderAgents','processLiveAgent',
   src.slice(spawnLiveStart,spawnLiveEnd)+';return spawnLiveAgent');
 const roster={agents:[{id:'h',name:'Hydrogen'},{id:'i',name:'Indium'}]};
-const spawnLive=makeSpawnLive(roster,['Hydrogen','Indium','Sulfur'],()=>[{node:'node-c',model:'model-c'}],name=>'prompt '+name,task=>[{role:'system',content:''},{role:'user',content:task}],()=> 'system',()=>{},()=>{},()=>{});
+const spawnLive=makeSpawnLive(roster,['Hydrogen','Indium','Sulfur'],()=>[{node:'node-c',model:'model-c'}],name=>'prompt '+name,task=>[{role:'system',content:''},{role:'user',content:task}],()=> 'system',()=>false,()=>{},()=>{},()=>{});
 const thirdAgent=spawnLive('model-c','third assignment'),overLimit=spawnLive('model-c','fourth assignment');
 ok(thirdAgent.ok&&thirdAgent.name==='Sulfur'&&roster.agents.length===3&&overLimit.error,'assigns Hydrogen, Indium, Sulfur and caps spawned agents at three plus Calcium');
 const processStart=src.indexOf('async function processLiveAgent('),processEnd=src.indexOf('async function runAgentTool(',processStart);
-const makeAgentProcess=new Function('CH','agentRuns','agentProcessing','renderAgents','TOOLINFO','loadTools','agentSystemText','compactAgentHistory','clamp','activeTools','llmCall','agentApiMessages','runTool','capTool','short','saveChat','finishLiveAgent',
+const makeAgentProcess=new Function('CH','agentRuns','agentProcessing','renderAgents','TOOLINFO','loadTools','agentSystemText','compactAgentHistory','clamp','agentToolDefs','llmCall','agentApiMessages','runTool','capTool','short','saveChat','finishLiveAgent','recordAgentMessage','shareAgentReply',
   src.slice(processStart,processEnd)+';return processLiveAgent');
 function runAgentLifecycle(responses,toolAction){
-  const agent={id:'h',name:'Hydrogen',model:'model-a',node:'node-a',status:'starting',task:'test',last:'',systemPrompt:'prompt',messages:[{role:'system',content:''},{role:'user',content:'task'}],inbox:[],finishRequested:false};
-  const CH={agents:[agent],steps:5},finished=[];let calls=0;
+  const agent={id:'h',name:'Hydrogen',model:'model-a',node:'node-a',status:'starting',task:'test',last:'',systemPrompt:'prompt',messages:[{role:'system',content:''},{role:'user',content:'task'}],inbox:[],sharedUpdates:[],finishRequested:false};
+  const CH={agents:[agent],steps:5},finished=[],shared=[];let calls=0;
   const runs=new Map();
   const run=makeAgentProcess(CH,runs,new Set(),()=>{},{tools:[]},async()=>{},()=> 'system',()=>false,(x,min,max)=>Math.max(min,Math.min(max,x)),()=>[],
     async()=>responses[calls++],a=>a.messages,async(tc)=>toolAction?toolAction(agent,runs,tc):(agent.finishRequested=true,'done'),String,String,()=>{},
-    (a,answer)=>{finished.push(answer);CH.agents=CH.agents.filter(x=>x!==a)});
-  return run(agent.id).then(()=>({agent,CH,finished,calls}));
+    (a,answer)=>{finished.push(answer);CH.agents=CH.agents.filter(x=>x!==a)},m=>shared.push(m),()=>{});
+  return run(agent.id).then(()=>({agent,CH,finished,calls,shared}));
 }
 const agentLifecycleTests=Promise.all([
   runAgentLifecycle([{tool_calls:[{id:'done',function:{name:'agent_done',arguments:'{}'}}]},{content:'Finished assignment'}])
     .then(x=>ok(x.finished[0]==='Finished assignment'&&x.CH.agents.length===0&&x.calls===2,'agent_done keeps the agent through its final answer, then removes it')),
   runAgentLifecycle([{content:'I am ready for another message'}])
-    .then(x=>ok(x.agent.status==='waiting'&&x.CH.agents.length===1,'a live agent remains available after replying')),
+    .then(x=>ok(x.agent.status==='waiting'&&x.CH.agents.length===1&&x.shared.some(m=>m.role==='assistant'&&m.agentName==='Hydrogen'&&m.content==='I am ready for another message'),
+      'a live agent remains available and posts its reply into the shared chat')),
   runAgentLifecycle([{tool_calls:[
     {id:'one',function:{name:'tell',arguments:'{}'}},
     {id:'two',function:{name:'status',arguments:'{}'}}
@@ -198,32 +237,32 @@ ok(new Date(dateOnly.dueAt).getHours()===9&&dateOnly.prompt==='review notes',
 const leapDay=parseSchedule('02-29 leap-day task',new Date(2026,0,1,8,0));
 ok(new Date(leapDay.dueAt).getFullYear()===2028,'finds the next valid year for a yearless leap-day schedule');
 const messageStart=src.indexOf('async function messageLiveAgent('),messageEnd=src.indexOf('function removeLiveAgent(',messageStart);
-const liveMessage=new Function('CH','agentProcessing','agentRuns','processLiveAgent','saveChat','renderAgents',
+const liveMessage=new Function('CH','agentProcessing','agentRuns','processLiveAgent','saveChat','renderAgents','recordAgentMessage','queueSharedChatMessage',
   src.slice(messageStart,messageEnd)+';return messageLiveAgent');
 let tellAborts=0,interruptAborts=0;
 const live={id:'h',name:'Hydrogen',status:'working',inbox:[]},runs=new Map([['h',{abort(){tellAborts++}}]]);
-const tell=liveMessage({agents:[live]},new Set(['h']),runs,()=>{},()=>{},()=>{});
+const tell=liveMessage({agents:[live]},new Set(['h']),runs,()=>{},()=>{},()=>{},()=>{},()=>{});
 tell(live,'keep going',false,'Calcium');
 ok(tellAborts===0&&live.inbox.length===1,'tell queues a message without interrupting an active agent');
 runs.set('h',{abort(){interruptAborts++}});
 tell(live,'change direction',true,'Calcium');
 ok(interruptAborts===1&&live.inbox.length===2,'interrupt aborts the active request and queues the redirect');
 const calciumMessageStart=src.indexOf('function messageCalcium('),calciumMessageEnd=src.indexOf('function flushAgentMessages(',calciumMessageStart);
-const toCalcium=new Function('CH','chatAbort','recordAgentMessage','setTimeout','chatSend','saveChat','renderChat',
+const toCalcium=new Function('CH','chatAbort','recordAgentMessage','setTimeout','chatSend','saveChat','renderChat','queueSharedChatMessage',
   src.slice(calciumMessageStart,calciumMessageEnd)+';return messageCalcium');
 let mainAborts=0,mainNotes=[];
-const incoming=toCalcium({agentInterrupt:false,agentNotes:[]},{abort(){mainAborts++}},m=>mainNotes.push(m),()=>{},()=>{},()=>{},()=>{});
+const incoming=toCalcium({agentInterrupt:false,agentNotes:[]},{abort(){mainAborts++}},m=>mainNotes.push(m),()=>{},()=>{},()=>{},()=>{},()=>{});
 incoming('keep going','Hydrogen',false);
 ok(mainAborts===0&&mainNotes[0].role==='user'&&mainNotes[0].content.includes('Hydrogen'),'agents can tell Calcium without interrupting its reply');
 incoming('change direction','Indium',true);
 ok(mainAborts===1,'an agent interrupt stops Calcium and sets the restart flag');
 const queueStart=src.indexOf('function renderChatQueue(){'),queueEnd=src.indexOf('async function chatSend(',queueStart);
 if(queueStart<0||queueEnd<0)throw Error('message queue helpers not found');
-const exerciseQueue=new Function('$','CH','PEND','renderPend','grow','slashUi','saveChat','chatAbort','capsNow','chatSend','alert','esc','short',
+const exerciseQueue=new Function('$','CH','PEND','renderPend','grow','slashUi','saveChat','chatAbort','capsNow','chatSend','alert','esc','short','queueSharedChatMessage',
   src.slice(queueStart,queueEnd)+`;queueChatMessage();const queuedWhileBusy=CH.queue.length===1&&CH.msgs.length===0;chatAbort=null;dispatchQueuedMessage();return {queuedWhileBusy,msg:CH.msgs[0],queue:CH.queue.length,pend:PEND};`);
 const els={'#cIn':{value:'follow-up'},'#cQueue':{hidden:true,innerHTML:''}};
 let sends=0;
-const queued=exerciseQueue(s=>els[s]||{}, {queue:[],msgs:[]},[{id:'img-1'}],()=>{},()=>{},()=>{},()=>{}, {},()=>({vision:true}),()=>{sends++},()=>{},x=>String(x),x=>String(x).slice(0,100));
+const queued=exerciseQueue(s=>els[s]||{}, {queue:[],msgs:[]},[{id:'img-1'}],()=>{},()=>{},()=>{},()=>{}, {},()=>({vision:true}),()=>{sends++},()=>{},x=>String(x),x=>String(x).slice(0,100),()=>{});
 ok(queued.queuedWhileBusy&&queued.msg.content==='follow-up'&&queued.msg.images[0].id==='img-1'&&queued.queue===0&&sends===1&&queued.pend.length===0,
   'Ctrl+Enter queue helpers hold messages during a reply, then dispatch text and image attachments in order');
 Promise.all([agentLifecycleTests,streamReconnectTest,failedConsumerTest]).then(()=>console.log('ALL PASSED')).catch(e=>{console.error(e);process.exitCode=1});
