@@ -1,4 +1,5 @@
 import os
+import stat
 import sys
 import tempfile
 import types
@@ -10,6 +11,24 @@ import worker
 
 
 class WorkerServiceTests(unittest.TestCase):
+    def test_systemd_user_env_discovers_runtime_dir_when_xdg_is_unset(self):
+        runtime_stat = types.SimpleNamespace(st_uid=1000, st_mode=stat.S_IFDIR | 0o700)
+        bus_stat = types.SimpleNamespace(st_uid=1000, st_mode=stat.S_IFSOCK | 0o600)
+        with patch.dict(worker.os.environ, {"XDG_RUNTIME_DIR": "", "DBUS_SESSION_BUS_ADDRESS": ""}, clear=True), \
+             patch.object(worker.os, "getuid", return_value=1000), \
+             patch.object(worker.os, "stat", side_effect=[runtime_stat, bus_stat]):
+            env = worker._systemd_user_env()
+        self.assertEqual(env["XDG_RUNTIME_DIR"], "/run/user/1000")
+        self.assertEqual(env["DBUS_SESSION_BUS_ADDRESS"], "unix:path=/run/user/1000/bus")
+
+    def test_systemd_user_env_ignores_runtime_dir_owned_by_another_user(self):
+        runtime_stat = types.SimpleNamespace(st_uid=0, st_mode=stat.S_IFDIR | 0o700)
+        with patch.dict(worker.os.environ, {"XDG_RUNTIME_DIR": ""}, clear=True), \
+             patch.object(worker.os, "getuid", return_value=1000), \
+             patch.object(worker.os, "stat", return_value=runtime_stat):
+            env = worker._systemd_user_env()
+        self.assertEqual(env["XDG_RUNTIME_DIR"], "")
+
     def test_autostart_rejects_non_linux_before_checking_systemctl(self):
         with patch.object(worker.platform, "system", return_value="Windows"), \
              patch.object(worker.shutil, "which") as which:

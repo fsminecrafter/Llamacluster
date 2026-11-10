@@ -515,7 +515,7 @@ body:not(.phone) .copt[open]{padding-bottom:10px}
     <div class="mut small" style="margin-top:6px">Tool output longer than this is cut off (≈4 characters per token) before it is sent back to the model, so big file reads or web pages can't overflow the context window. Software mode and Orchestra workers use at most 1000. Default 3000.</div>
     <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
     <div class="small"><b>Worker services</b></div>
-    <div class="mut small" style="margin:4px 0 8px">Manage Linux workers on this cluster. Autostart uses a systemd user service; non-Linux nodes and Linux hosts without an available systemd user manager are skipped or report an error.</div>
+    <div class="mut small" style="margin:4px 0 8px">Manage Linux workers on this cluster. Autostart uses a systemd user service; non-Linux nodes and Linux hosts without an available systemd user manager are skipped or report an error. For headless SSH workers, enable lingering for the worker account with <code>sudo loginctl enable-linger USER</code>.</div>
     <div class="row">
       <button onclick="openWorkerSetup()">Install autostart service on all nodes</button>
       <button class="dng" onclick="runWorkerAction('uninstall')">Uninstall autostart service on all nodes</button>

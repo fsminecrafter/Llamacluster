@@ -17,6 +17,7 @@ import platform
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import socket
 import struct
@@ -1178,6 +1179,30 @@ _SRV = None
 SERVICE_NAME = "llamacluster-worker"
 
 
+def _systemd_user_env():
+    env = os.environ.copy()
+    if env.get("XDG_RUNTIME_DIR"):
+        return env
+    uid = os.getuid()
+    runtime_dir = "/run/user/%d" % uid
+    try:
+        runtime_stat = os.stat(runtime_dir)
+    except OSError:
+        return env
+    if runtime_stat.st_uid != uid or not stat.S_ISDIR(runtime_stat.st_mode):
+        return env
+    env["XDG_RUNTIME_DIR"] = runtime_dir
+    bus_path = os.path.join(runtime_dir, "bus")
+    try:
+        bus_stat = os.stat(bus_path)
+    except OSError:
+        pass
+    else:
+        if stat.S_ISSOCK(bus_stat.st_mode) and not env.get("DBUS_SESSION_BUS_ADDRESS"):
+            env["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=" + bus_path
+    return env
+
+
 def _systemd_user():
     if platform.system() != "Linux":
         raise RuntimeError("autostart services are supported only on Linux")
@@ -1185,10 +1210,13 @@ def _systemd_user():
     if not systemctl:
         raise RuntimeError("systemctl was not found; this Linux host does not support systemd user services")
     result = subprocess.run([systemctl, "--user", "show-environment"], capture_output=True,
-                            text=True, timeout=10)
+                            text=True, timeout=10, env=_systemd_user_env())
     if result.returncode:
         detail = (result.stderr or result.stdout).strip()
-        raise RuntimeError("systemd user manager is unavailable" + (": " + detail if detail else ""))
+        message = ("systemd user manager is unavailable; run the worker as the account "
+                   "that should own the service, and enable lingering for headless use "
+                   "with `sudo loginctl enable-linger USER`")
+        raise RuntimeError(message + (": " + detail if detail else ""))
     return systemctl
 
 
@@ -1274,7 +1302,7 @@ def _atomic_private_write(path, content):
 
 def _systemctl(systemctl, *args):
     result = subprocess.run([systemctl, "--user", *args], capture_output=True,
-                            text=True, timeout=30)
+                            text=True, timeout=30, env=_systemd_user_env())
     if result.returncode:
         detail = (result.stderr or result.stdout).strip()
         raise RuntimeError("systemctl " + " ".join(args) + " failed" +
@@ -1284,7 +1312,7 @@ def _systemctl(systemctl, *args):
 
 def _service_active(systemctl):
     result = subprocess.run([systemctl, "--user", "is-active", "--quiet", SERVICE_NAME + ".service"],
-                            capture_output=True, text=True, timeout=10)
+                            capture_output=True, text=True, timeout=10, env=_systemd_user_env())
     return result.returncode == 0
 
 
@@ -1300,7 +1328,8 @@ def _worker_handover(start_service=False):
         systemctl = shutil.which("systemctl")
         if systemctl:
             result = subprocess.run([systemctl, "--user", "start", SERVICE_NAME + ".service"],
-                                    capture_output=True, text=True, timeout=30)
+                                    capture_output=True, text=True, timeout=30,
+                                    env=_systemd_user_env())
             if result.returncode:
                 print("[worker] could not activate autostart service:", (result.stderr or result.stdout).strip(),
                       flush=True)
