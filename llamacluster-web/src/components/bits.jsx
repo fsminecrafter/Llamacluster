@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
+import ShinyText from './ShinyText.jsx';
 // Small widgets in the spirit of React Bits (reactbits.dev): Status Mark, Call Chip, Thought Line, Lattice Loader and a Rubber Segment control.
 // Written without extra dependencies; all motion is CSS and respects prefers-reduced-motion.
 export const useClock=(on)=>{const [t,setT]=useState(0),s=useRef(0);useEffect(()=>{if(!on){s.current=0;return}s.current=s.current||Date.now();const i=setInterval(()=>setT(Date.now()-s.current),200);return()=>clearInterval(i)},[on]);return t};
@@ -24,7 +25,7 @@ export function ThoughtLine({text,live,style='classic'}){
   return <details className="think thoughtline">
     <summary>
       {style==='lattice'?<LatticeLoader on={live}/>:<StatusMark state={live?'run':'ok'} size={14}/>}
-      {live?'Thinking':'Thought'}
+      {live?(style==='lattice'?'Thinking':<ShinyText>Thinking…</ShinyText>):'Thought'}
       {(live?ms:final)>=1000&&<span className="mut small"> · {fmtDur(live?ms:final)}</span>}
       {!live&&steps.length>1&&<span className="mut small"> · {steps.length} steps</span>}
     </summary>

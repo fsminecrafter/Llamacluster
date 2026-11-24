@@ -70,6 +70,7 @@ export default function Chat(){
         <div className="plabel">Appearance</div>
         <div className="seg2">{THEMES.map(t=><button key={t.id} className={theme===t.id?'on':''} onClick={()=>setTheme(t.id)}>{t.label}</button>)}</div>
         <label>Thinking animation<select value={thinkingStyle} onChange={e=>setThinkingStylePref(e.target.value)}><option value="classic">Current animation</option><option value="lattice">Lattice loader</option></select></label>
+        <div className="think-preview" aria-live="polite">{thinkingStyle==='lattice'?<><LatticeLoader on/><span>Thinking…</span></>:<><StatusMark state="run" size={14}/><ShinyText>Thinking…</ShinyText></>}</div>
         <div className="plabel">Generation</div>
         <div className="col2"><label>Temperature<input type="number" step="0.1" min="0" max="2" value={CH.temp} onChange={e=>setField('temp',e.target.value===''?0.7:+e.target.value)}/></label>
           <label>Max tokens<input type="number" min="1" placeholder="no limit" value={CH.max} onChange={e=>setField('max',e.target.value===''?'':+e.target.value)}/></label></div>
@@ -96,7 +97,7 @@ export default function Chat(){
         return <div key={i} className={'msg '+m.role+(m.agentName?' agentmsg agent-'+m.agentName.toLowerCase():'')+(last?' fresh':'')+(live&&m.content?' streaming':'')}>
           {m.agentName&&<div className="who"><b>{m.agentName}</b>{m.node?<span className="mut"> · {m.node}</span>:null}</div>}
           {m.images?.length>0&&<div className="imgs">{m.images.map(x=>IMGS[x.id]?<img key={x.id} src={IMGS[x.id]} alt={x.name}/>:<span key={x.id} className="mut small">🖼 {x.name} — image no longer stored</span>)}</div>}
-          {m.reasoning?<ThoughtLine text={m.reasoning} live={live&&!m.content&&!m.tool_calls} style={thinkingStyle}/>:live&&!m.content&&!m.tool_calls?(thinkingStyle==='lattice'?<ThoughtLine text="" live style="lattice"/>:<div className="body think-wait"><LatticeLoader on/><ShinyText>Thinking…</ShinyText></div>):null}
+          {m.reasoning?<ThoughtLine text={m.reasoning} live={live&&!m.content&&!m.tool_calls} style={thinkingStyle}/>:live&&!m.content&&!m.tool_calls?<ThoughtLine text="" live style={thinkingStyle}/>:null}
           {(m.tool_calls||[]).length>0&&<div className="tcs">{m.tool_calls.map(c=><ToolChip key={c.id} c={c} out={outs.get(c.id)} running={busy&&(last||i>=CH.msgs.length-2)&&!outs.get(c.id)}/>)}</div>}
           {m.content?(m.role==='assistant'?<div className="body"><Markdown text={m.content}/></div>:<div className="body">{m.content}</div>):null}
           {m.error&&<p className="err small">{m.error}</p>}{m.stopped&&<p className="mut small">Stopped</p>}

@@ -37,6 +37,8 @@
 .chatpage .msg.assistant{font:15.5px/1.7 var(--read);white-space:normal;overflow-wrap:anywhere}
 .chatpage .msg.agentmsg{border-left:2px solid var(--line);padding-left:12px}.who{font-size:12px;margin-bottom:2px}
 .chatpage .think,.chatpage .thoughtline{margin-bottom:6px}.chatpage .thoughtline>summary{color:var(--mut);font-size:12.5px;list-style:none}.chatpage .thoughtline>summary::-webkit-details-marker{display:none}
+.chatpage .thoughtline>summary::after{content:"⌄";margin-left:auto;transition:transform .15s}.chatpage .thoughtline[open]>summary::after{transform:rotate(180deg)}
+.think-preview{display:flex;align-items:center;gap:8px;min-height:24px;padding:4px 8px;color:var(--mut);font-size:12px}
 .think-wait{display:flex;align-items:center;gap:8px}.think-wait .lattice{flex:none}
 .chatpage .thoughtbody{border-left:2px solid var(--line);padding-left:10px;margin:6px 0 0 4px;color:var(--mut);font-size:12.5px}
 .acts{display:flex;align-items:center;gap:2px;margin-top:4px;opacity:0}.msg:hover .acts,.msg:focus-within .acts{opacity:1}@media(hover:none){.acts{opacity:1}}
