@@ -1,20 +1,22 @@
 import React,{useEffect,useRef,useState} from 'react';import {Link} from 'react-router-dom';
-import {useNodes} from '../useNodes.js';import {ThemeSwitcher} from '../theme.jsx';import ShinyText from '../components/ShinyText.jsx';
-import ToolChip from '../components/ToolChip.jsx';import ContextRing from '../components/ContextRing.jsx';import Workspace from '../components/Workspace.jsx';import Agents from '../components/Agents.jsx';
-import {ThoughtLine,Segment,StatusMark} from '../components/bits.jsx';
+import {useNodes} from '../useNodes.js';import {useTheme,THEMES} from '../theme.jsx';import ShinyText from '../components/ShinyText.jsx';
+import ToolChip from '../components/ToolChip.jsx';import ContextRing from '../components/ContextRing.jsx';import Workspace from '../components/Workspace.jsx';import Agents from '../components/Agents.jsx';import Markdown from '../components/Markdown.jsx';
+import {ThoughtLine,StatusMark,Pop,Icon,ICONS} from '../components/bits.jsx';
 import {CH,rt,emit,saveChat,setNodes,useChat,capsNow,readyNodes,short,IMGS,newId,idbPut,MODES} from '../chat/store.js';
 import {shrink} from '../chat/ctx.js';
 import {nodeModel} from '../chat/strength.js';
 import {loadTools,loadMsgImages,ctxState,groupOk,activeTools,setMode,setPerm,sendMessage,queueMessage,unqueue,stop,regen,clearChat,planAccept,planDecline,planRevise,planMsg,
-  swState,SLASH,workspaceFiles,syncScheduled,cancelSchedule,dismissBtw,notice} from '../chat/engine.js';
+  swState,SLASH,workspaceFiles,syncScheduled,cancelSchedule,dismissBtw} from '../chat/engine.js';
+import '../chat.css';
 const PHASE={planning:'Planning…',running:'Working…',synthesizing:'Writing the answer…',done:'Done',failed:'Failed',stopped:'Stopped'};
 const LABEL={queued:'Waiting…',running:'Working…',done:'Done',error:'Failed',skipped:'Skipped',stopped:'Stopped'};
-const PLACEHOLDER={dev:'Message Calcium, or type / for commands',ask:'Ask about the files in your workspace…',plan:'Describe what you want planned…',orchestra:'Describe a job to split across your nodes…',leader:'Describe a job — the leader plans it and shares the tasks by difficulty…',software:'Describe the software to build — it works alone until time is up…'};
-const modeOpts=Object.entries(MODES).map(([k,v])=>[k,v.replace(/^\S+\s/,''),v]);
+const PLACEHOLDER={dev:'Message Calcium…',ask:'Ask about the files in your workspace…',plan:'Describe what you want planned…',orchestra:'Describe a job to split across your nodes…',leader:'Describe a job for the leader to plan…',software:'Describe the software to build…'};
+const MODE_INFO={dev:['🛠','Dev','Chat with tools'],ask:['❓','Ask','Answer questions about your files, read-only'],plan:['🧭','Plan','Research and propose a plan first'],orchestra:['🎼','Orchestra','Split a job across nodes in parallel'],leader:['👑','Leader','Strongest model plans, others work by difficulty'],software:['💻','Software','Build alone on a time budget']};
+const PERMS=[['manual','✋ Manual','Ask before every tool call'],['semi','🛡 Semi','Ask for writes and commands'],['uncontrolled','⚡ Uncontrolled','Never ask']];
 export default function Chat(){
-  const {nodes}=useNodes(4000);const {ver}=useChat();
-  const [input,setInput]=useState(''),[imgs,setImgs]=useState([]),[drop,setDrop]=useState(false),[ws,setWs]=useState(false),[files,setFiles]=useState([]),[,tick]=useState(0);
-  const end=useRef(),fileIn=useRef(),stick=useRef(true);
+  const {nodes}=useNodes(4000);const {ver}=useChat();const {theme,setTheme}=useTheme();
+  const [input,setInput]=useState(''),[imgs,setImgs]=useState([]),[drop,setDrop]=useState(false),[ws,setWs]=useState(false),[files,setFiles]=useState([]),[dock,setDock]=useState(''),[,tick]=useState(0);
+  const end=useRef(),fileIn=useRef(),stick=useRef(true),ta=useRef();
   useEffect(()=>setNodes(nodes),[nodes]);
   useEffect(()=>{loadTools();loadMsgImages();syncScheduled();const t=setInterval(()=>{syncScheduled()},20000);return()=>clearInterval(t)},[]);
   useEffect(()=>{if(CH.mode!=='software')return;const t=setInterval(()=>tick(x=>x+1),1000);return()=>clearInterval(t)},[CH.mode]);
@@ -22,14 +24,11 @@ export default function Chat(){
   const busy=!!rt.chatAbort,ready=readyNodes(),models=[...new Set(ready.map(nodeModel))],caps=capsNow(),rs=caps.reasoning;
   const eopts=rs?(rs.kind==='effort'?[['','Default'],...rs.levels.map(l=>[l,l[0].toUpperCase()+l.slice(1)])]:[['','Default'],['off','Off'],['on','On']]):[];
   const sw=swState(),useTools=activeTools().length>0,ctx=ctxState();
-  // ---- selects with per-model sampling memory (same as the old UI)
   const msamp=()=>{CH.msamp=CH.msamp||{};if(CH.model)CH.msamp[CH.model]={temp:CH.temp,max:CH.max,effort:CH.effort||''}};
   const setModel=m=>{CH.model=m;CH.effort='';const s=m&&CH.msamp?.[m];if(s){CH.temp=s.temp;CH.max=s.max;CH.effort=s.effort||''}saveChat();emit()};
   const setField=(k,v)=>{CH[k]=v;msamp();saveChat();emit()};
-  // ---- images
   const addFiles=async fs=>{try{const ok=[...fs].filter(f=>f.type.startsWith('image/')).slice(0,6-imgs.length);
     const added=await Promise.all(ok.map(async f=>{const id=newId('img');const d=await shrink(f);await idbPut(id,d);return{id,name:f.name||'image'}}));setImgs(x=>[...x,...added])}catch(e){rt.err=e.message;emit()}};
-  // ---- slash completion
   useEffect(()=>{let live=true;const m=/^\/(read|view)\s+([^\n]*)$/i.exec(input);if(!m){setFiles([]);return}
     workspaceFiles().then(all=>{if(!live)return;const q=m[2].trim().toLowerCase(),isImg=/^view$/i.test(m[1]);
       setFiles(all.filter(p=>(!isImg||/\.(jpe?g|png|webp|gif|bmp)$/i.test(p))&&(!q||p.toLowerCase().startsWith(q)||p.toLowerCase().split('/').pop().startsWith(q))).slice(0,8).map(p=>[m[1],p]))}).catch(()=>setFiles([]));return()=>{live=false}},[input]);
@@ -40,69 +39,91 @@ export default function Chat(){
     if(queue){if(queueMessage(text,imgs)){setInput('');setImgs([])}return}
     const im=imgs;setInput('');setImgs([]);const ok=await sendMessage(text,im);if(ok===false&&!text.startsWith('/')){setInput(text);setImgs(im)}
   };
-  const onKey=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submit(e.ctrlKey||e.metaKey)}};
+  const onKey=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();submit(e.ctrlKey||e.metaKey)}};
   const onScroll=e=>{const el=e.currentTarget;stick.current=el.scrollHeight-el.scrollTop-el.clientHeight<120};
-  // ---- messages: tool results are shown inside the assistant message that made the call
   const outs=new Map(CH.msgs.filter(m=>m.role==='tool').map(m=>[m.tool_call_id,m]));
-  const last=CH.msgs[CH.msgs.length-1],pm=planMsg();
-  const tools=[...new Map((rt.toolinfo?.tools||[]).map(t=>[t.group,t])).values()].filter(t=>CH.tools[t.group]&&groupOk(t.group));
-  const hint=useTools?`${tools.length} tool group${tools.length===1?'':'s'} · ${({manual:'✋ manual',semi:'🛡 semi',uncontrolled:'⚡ uncontrolled'})[rt.permOverride||CH.perm]}`:!rt.toolinfo?'tools unavailable (update controller.py)':'no tools';
+  const pm=planMsg(),lastIdx=CH.msgs.length-1;
+  const sched=(rt.scheduled||[]).filter(t=>['scheduled','running'].includes(t.status)).length;
+  const agentsBusy=CH.agents.some(a=>['working','starting','queued','interrupted'].includes(a.status));
+  const modelLabel=CH.model?short(CH.model.replace(/\.gguf$/i,'').split('/').pop(),26):ready.length?'Auto':'No model';
+  const mi=MODE_INFO[CH.mode]||MODE_INFO.dev;
+  const toggle=k=>setDock(dock===k?'':k);
   return <div className={'chatpage'+(drop?' dropping':'')} onDragOver={e=>{if([...(e.dataTransfer?.types||[])].includes('Files')){e.preventDefault();setDrop(true)}}} onDragLeave={e=>{if(e.target===e.currentTarget)setDrop(false)}} onDrop={e=>{setDrop(false);if(e.dataTransfer?.files?.length){e.preventDefault();addFiles(e.dataTransfer.files)}}}>
-    <header className="top"><Link className="btn ghost" to="/">← Cluster</Link><h1><ShinyText on={busy}>Calcium</ShinyText></h1><span className="grow"/>
-      <select value={models.includes(CH.model)?CH.model:''} onChange={e=>setModel(e.target.value)} aria-label="Model"><option value="">Any ready node</option>{models.map(m=><option key={m} value={m}>{m}</option>)}</select>
-      <select value={ready.some(n=>n.name===CH.route)?CH.route:''} onChange={e=>{CH.route=e.target.value;saveChat();emit()}} aria-label="Send to"><option value="">Auto (load-balanced)</option>{ready.map(n=><option key={n.id} value={n.name}>{n.name}</option>)}</select>
-      <ThemeSwitcher/><button onClick={()=>setWs(true)} title="Tools, files and terminal">🗂 Workspace</button><button className="ghost" onClick={clearChat}>Clear</button></header>
+    <header className="ctop">
+      <Link className="ib" to="/" aria-label="Back to cluster" title="Cluster"><Icon d={ICONS.back}/></Link>
+      <span className="brand"><ShinyText on={busy}>Calcium</ShinyText></span><span className="grow"/>
+      <Pop className="pill" label="Model" align="right" trigger={<><span className={'dot '+(ready.length?'ready':'')}/>{modelLabel}<Icon d={ICONS.chev} size={14}/></>}>{close=><div className="plist">
+        <div className="plabel">Model</div>
+        <button className={'pitem'+(!CH.model?' sel':'')} onClick={()=>{setModel('');close()}}>Any ready node{!CH.model&&<Icon d={ICONS.check} size={14}/>}</button>
+        {models.map(m=><button key={m} className={'pitem'+(CH.model===m?' sel':'')} onClick={()=>{setModel(m);close()}}><span className="grow">{m.replace(/\.gguf$/i,'')}</span>{CH.model===m&&<Icon d={ICONS.check} size={14}/>}</button>)}
+        {!models.length&&<div className="mut small pnote">No node is serving yet. Start a model from the cluster page.</div>}
+        <div className="plabel">Send to</div>
+        <select value={ready.some(n=>n.name===CH.route)?CH.route:''} onChange={e=>{CH.route=e.target.value;saveChat();emit()}}><option value="">Auto (load-balanced)</option>{ready.map(n=><option key={n.id} value={n.name}>{n.name}</option>)}</select></div>}</Pop>
+      <Pop className="ibwrap" label="Settings" align="right" trigger={<Icon d={ICONS.sliders}/>}>{close=><div className="pset">
+        <div className="plabel">Appearance</div>
+        <div className="seg2">{THEMES.map(t=><button key={t.id} className={theme===t.id?'on':''} onClick={()=>setTheme(t.id)}>{t.label}</button>)}</div>
+        <div className="plabel">Generation</div>
+        <div className="col2"><label>Temperature<input type="number" step="0.1" min="0" max="2" value={CH.temp} onChange={e=>setField('temp',e.target.value===''?0.7:+e.target.value)}/></label>
+          <label>Max tokens<input type="number" min="1" placeholder="no limit" value={CH.max} onChange={e=>setField('max',e.target.value===''?'':+e.target.value)}/></label></div>
+        {rs&&<label>{rs.kind==='effort'?'Reasoning effort':'Thinking'}<select value={eopts.some(o=>o[0]===CH.effort)?CH.effort:''} onChange={e=>setField('effort',e.target.value)}>{eopts.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>}
+        <div className="plabel">Tools</div>
+        <div className="seg2">{PERMS.map(([v,l,t])=><button key={v} title={t} disabled={!useTools} className={CH.perm===v?'on':''} onClick={()=>setPerm(v)}>{l}</button>)}</div>
+        <div className="mut small">{useTools?`${activeTools().length} tools available in this mode`:!rt.toolinfo?'Tools unavailable — update controller.py':'No tools enabled'}</div>
+        <div className="prow"><button onClick={()=>{close();setWs(true)}}><Icon d={ICONS.folder} size={15}/> Workspace</button><button className="danger" onClick={()=>{close();clearChat()}}><Icon d={ICONS.trash} size={15}/> Clear chat</button></div></div>}</Pop>
+    </header>
     <Workspace open={ws} onClose={()=>setWs(false)}/>
-    <details className="cfgbar"><summary>⚙ {CH.model?short(CH.model.replace(/\.gguf$/i,'').split('/').pop(),32):'any model'} · {CH.route||'auto'} · {CH.temp}°{rs&&CH.effort?' · 🧠 '+CH.effort:''}</summary><div className="col2">
-      <label>Temperature<input type="number" step="0.1" min="0" max="2" value={CH.temp} onChange={e=>setField('temp',e.target.value===''?0.7:+e.target.value)}/></label>
-      <label>Max tokens<input type="number" min="1" placeholder="no limit" value={CH.max} onChange={e=>setField('max',e.target.value===''?'':+e.target.value)}/></label>
-      {rs&&<label>{rs.kind==='effort'?'Reasoning effort':'Thinking'}<select title={rs.kind==='effort'?'Low = quick answers, High = think longer.':'Turns the model’s thinking on or off.'} value={eopts.some(o=>o[0]===CH.effort)?CH.effort:''} onChange={e=>setField('effort',e.target.value)}>{eopts.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>}
-    </div></details>
     <div className="log" onScroll={onScroll}><div className="col">
-      {!CH.msgs.length&&<div className="empty"><h2><ShinyText>How can I help?</ShinyText></h2><p className="mut">{ready.length?`${ready.length} node${ready.length>1?'s':''} ready.`:'No node is serving yet. Start a model from the cluster page.'}</p></div>}
+      {!CH.msgs.length&&<div className="empty"><h2><ShinyText>How can I help?</ShinyText></h2><p className="mut">{ready.length?`${ready.length} node${ready.length>1?'s':''} ready`:'No node is serving yet'}</p></div>}
       {CH.msgs.map((m,i)=>{
         if(m.role==='tool')return null;
         if(m.role==='compact')return <details key={i} className="note"><summary>📦 Earlier messages summarised{m.auto?' (automatic)':''}</summary><pre className="tcb">{m.content}</pre></details>;
         if(m.role==='orchestra')return <Orch key={i} m={m}/>;
         if(m.local)return <div key={i} className="note">{m.content}</div>;
         if(m.role==='user'&&m.auto)return <div key={i} className="note">↻ {m.label||short(m.content,80)}</div>;
-        const last=i===CH.msgs.length-1,live=!!m.streaming;
+        const last=i===lastIdx,live=!!m.streaming;
         return <div key={i} className={'msg '+m.role+(m.agentName?' agentmsg agent-'+m.agentName.toLowerCase():'')}>
-          {m.agentName&&<div className="small mut"><b>{m.agentName}</b>{m.node?' · '+m.node:''}</div>}
-          {m.images?.length>0&&<div className="imgs">{m.images.map(x=>IMGS[x.id]?<img key={x.id} src={IMGS[x.id]} alt={x.name}/>:<span key={x.id} className="mut small">🖼 {x.name} — image no longer stored (images are not kept after a reload)</span>)}</div>}
+          {m.agentName&&<div className="who"><b>{m.agentName}</b>{m.node?<span className="mut"> · {m.node}</span>:null}</div>}
+          {m.images?.length>0&&<div className="imgs">{m.images.map(x=>IMGS[x.id]?<img key={x.id} src={IMGS[x.id]} alt={x.name}/>:<span key={x.id} className="mut small">🖼 {x.name} — image no longer stored</span>)}</div>}
           {m.reasoning&&<ThoughtLine text={m.reasoning} live={live&&!m.content&&!m.tool_calls}/>}
-          {(m.tool_calls||[]).length>0&&<div className="tcs">{m.tool_calls.map(c=><ToolChip key={c.id} c={c} out={outs.get(c.id)} running={busy&&last||busy&&!outs.get(c.id)&&i>=CH.msgs.length-2}/>)}</div>}
-          {(m.content||(live&&!m.tool_calls&&!m.reasoning))&&<div className="body">{m.content||<ShinyText>Thinking…</ShinyText>}</div>}
-          {m.error&&<p className="err small">{m.error}</p>}{m.stopped&&<p className="mut small">stopped</p>}
-          {m.role==='assistant'&&!live&&(m.node||m.tps)&&<div className="mut small meta">{m.node}{m.tps?` · ${m.tps.toFixed(1)} tok/s`:''}</div>}
-          {m.plan==='pending'&&!busy&&i===CH.msgs.length-1&&<PlanBar/>}
-          {m.role==='assistant'&&!m.agentName&&last&&!busy&&!m.tool_calls&&<div className="row"><button className="ghost small" onClick={regen} title="Regenerate">↻ Regenerate</button><button className="ghost small" onClick={()=>navigator.clipboard?.writeText(m.content||'')}>Copy</button></div>}
+          {(m.tool_calls||[]).length>0&&<div className="tcs">{m.tool_calls.map(c=><ToolChip key={c.id} c={c} out={outs.get(c.id)} running={busy&&(last||i>=CH.msgs.length-2)&&!outs.get(c.id)}/>)}</div>}
+          {m.content?(m.role==='assistant'?<div className="body"><Markdown text={m.content}/></div>:<div className="body">{m.content}</div>):(live&&!m.tool_calls&&!m.reasoning&&<div className="body"><ShinyText>Thinking…</ShinyText></div>)}
+          {m.error&&<p className="err small">{m.error}</p>}{m.stopped&&<p className="mut small">Stopped</p>}
+          {m.plan==='pending'&&!busy&&last&&<PlanBar/>}
+          {m.role==='assistant'&&!live&&!m.agentName&&m.content&&<div className="acts">
+            <button className="ib sm" title="Copy" aria-label="Copy" onClick={()=>navigator.clipboard?.writeText(m.content||'')}><Icon d={ICONS.copy} size={15}/></button>
+            {last&&!busy&&!m.tool_calls&&<button className="ib sm" title="Regenerate" aria-label="Regenerate" onClick={regen}><Icon d={ICONS.redo} size={15}/></button>}
+            {(m.node||m.tps)&&<span className="mut small">{m.node}{m.tps?` · ${m.tps.toFixed(1)} tok/s`:''}</span>}</div>}
         </div>})}
       {rt.err&&<p className="err">{rt.err}</p>}<div ref={end}/></div></div>
-    {CH.btw.length>0&&<div className="btwbox">{CH.btw.map(b=><div key={b.id}><b>/btw {b.q}</b><div className={'small'+(b.state==='err'?' err':'')}>{b.state==='run'?<ShinyText>Thinking…</ShinyText>:b.a}</div><button className="ghost small" onClick={()=>dismissBtw(b.id)}>Dismiss</button></div>)}</div>}
-    <footer className="composer-wrap">
+    <footer className="cfoot"><div className="cin">
+      {CH.btw.length>0&&<div className="btwbox">{CH.btw.map(b=><div key={b.id} className="btw"><div className="small mut">/btw {b.q}</div><div className={'small'+(b.state==='err'?' err':'')}>{b.state==='run'?<ShinyText>Thinking…</ShinyText>:b.a}</div><button className="ghost small" onClick={()=>dismissBtw(b.id)}>Dismiss</button></div>)}</div>}
       {rt.ask&&<AskBox ask={rt.ask}/>}
-      <Agents/>
-      {CH.tasks.length>0&&<details className="taskbox" open><summary>Tasks · {CH.tasks.filter(t=>t.status==='done').length}/{CH.tasks.length} done</summary>
+      {(CH.agents.length>0||CH.tasks.length>0||CH.queue.length>0||sched>0)&&<div className="dockbar">
+        {CH.agents.length>0&&<button className={'dpill'+(dock==='agents'?' on':'')} onClick={()=>toggle('agents')}><StatusMark state={agentsBusy?'run':'idle'} size={13}/>Agents {CH.agents.length}</button>}
+        {CH.tasks.length>0&&<button className={'dpill'+(dock==='tasks'?' on':'')} onClick={()=>toggle('tasks')}>☑ {CH.tasks.filter(t=>t.status==='done').length}/{CH.tasks.length}</button>}
+        {CH.queue.length>0&&<button className={'dpill'+(dock==='queue'?' on':'')} onClick={()=>toggle('queue')}>Queue {CH.queue.length}</button>}
+        {sched>0&&<button className={'dpill'+(dock==='sched'?' on':'')} onClick={()=>toggle('sched')}>⏰ {sched}</button>}</div>}
+      {dock==='agents'&&CH.agents.length>0&&<div className="dockpanel"><Agents/></div>}
+      {dock==='tasks'&&CH.tasks.length>0&&<div className="dockpanel">
         {CH.tasks.map(t=><div key={t.id} className={'tk '+t.status}><button className="ghost" title="Change status" onClick={()=>{t.status={todo:'doing',doing:'done',done:'todo'}[t.status];saveChat();emit()}}>{{todo:'○',doing:'◐',done:'✓'}[t.status]}</button><span className="grow">{t.title}</span><button className="ghost" aria-label="Remove task" onClick={()=>{CH.tasks=CH.tasks.filter(x=>x!==t);saveChat();emit()}}>×</button></div>)}
-        <div className="row"><button className="ghost small" onClick={()=>{CH.tasks=CH.tasks.filter(t=>t.status!=='done');saveChat();emit()}}>Clear done</button><button className="ghost small" onClick={()=>{CH.tasks=[];saveChat();emit()}}>Clear all</button></div></details>}
-      {rt.scheduled?.length>0&&<details className="taskbox"><summary>⏰ Scheduled tasks · {rt.scheduled.filter(t=>['scheduled','running'].includes(t.status)).length} active</summary>
-        {rt.scheduled.slice(-30).reverse().map(t=><div key={t.id} className="tk"><span className="grow small"><b>{t.status}</b> · {new Date(t.due_at*1000).toLocaleString()} · {t.prompt}{t.result&&<div className="mut">{short(t.result,400)}</div>}{t.error&&<div className="err">{t.error}</div>}</span>
-          {['scheduled','running'].includes(t.status)&&<button className="ghost" onClick={()=>cancelSchedule(t.id)}>Cancel</button>}</div>)}</details>}
-      {CH.queue.length>0&&<div className="taskbox">Queue ({CH.queue.length}) · Ctrl+Enter adds a message{CH.queue.map((q,i)=><div key={i} className="row"><span className="grow small">{short(q.text||'Image attachment',100)}{q.images?.length?` · ${q.images.length} image${q.images.length===1?'':'s'}`:''}</span><button className="ghost small" onClick={()=>unqueue(i)}>×</button></div>)}</div>}
-      <div className="chips"><Segment label="Mode" value={CH.mode} options={modeOpts} onChange={setMode}/>
-        {CH.mode==='leader'&&<select value={ready.some(n=>n.name===CH.leader)?CH.leader:''} onChange={e=>{CH.leader=e.target.value;saveChat();emit()}} aria-label="Leader node"><option value="">👑 Leader: auto (strongest)</option>{ready.map(n=><option key={n.id} value={n.name}>👑 {n.name} · {String(nodeModel(n)).replace(/\.gguf$/i,'')}</option>)}</select>}
-        {CH.mode==='software'&&<label className="row small mut">Minutes<input type="number" min="0.1" max="720" disabled={sw.running||sw.going} value={CH.swMin} onChange={e=>{CH.swMin=+e.target.value||30;saveChat();emit()}} style={{width:68}}/></label>}
-        <select value={CH.perm} onChange={e=>setPerm(e.target.value)} aria-label="Tool permissions" disabled={!useTools}><option value="manual">✋ Manual</option><option value="semi">🛡 Semi</option><option value="uncontrolled">⚡ Uncontrolled</option></select>
-        {rs&&<select value={eopts.some(o=>o[0]===CH.effort)?CH.effort:''} onChange={e=>setField('effort',e.target.value)} aria-label={rs.kind==='effort'?'Reasoning effort':'Thinking'} title={rs.kind==='effort'?'Reasoning effort: low = quick, high = think longer':'Thinking on/off'}>{eopts.map(([v,l])=><option key={v} value={v}>🧠 {l}</option>)}</select>}
-        <span className="mut small">{sw.label||hint}</span></div>
-      {(cmds.length>0||files.length>0)&&<div className="slash">{cmds.map(c=><button key={c[0]} onClick={()=>setInput(c[0]+' ')}><b>{c[0]}</b> <span className="mut">{c[1]}</span></button>)}{files.map(([c,p])=><button key={p} onClick={()=>setInput(`/${c.toLowerCase()} ${p} `)}><b>{p}</b> <span className="mut">file</span></button>)}</div>}
-      {imgs.length>0&&<div className="imgs thumbs">{imgs.map(x=><span key={x.id}>{IMGS[x.id]&&<img src={IMGS[x.id]} alt=""/>}<button onClick={()=>setImgs(imgs.filter(y=>y.id!==x.id))} aria-label="Remove image">×</button></span>)}{!caps.vision&&<span className="mut small">The selected model can’t read images — pick a vision model before sending.</span>}</div>}
-      <div className="composer"><button className="ghost" title={caps.vision?'Attach an image (or paste / drop one)':'Attach now; select a multimodal model with a loaded vision projector before sending.'} onClick={()=>fileIn.current.click()}>📎</button><input ref={fileIn} type="file" accept="image/*" multiple hidden onChange={e=>{addFiles(e.target.files);e.target.value=''}}/>
-        <textarea rows={1} value={input} placeholder={PLACEHOLDER[CH.mode]} onChange={e=>setInput(e.target.value)} onKeyDown={onKey} onPaste={e=>{const f=[...(e.clipboardData?.files||[])].filter(x=>/^image\//.test(x.type));if(f.length){e.preventDefault();addFiles(f)}}}/>
-        <ContextRing s={ctx}/>
-        {busy&&!input.trim()&&!imgs.length?<button onClick={stop}>Stop</button>:<button className="pri" disabled={!input.trim()&&!imgs.length} onClick={()=>submit(false)}>{busy?'Queue':'Send'}</button>}</div>
-    </footer>
+        <div className="row"><button className="ghost small" onClick={()=>{CH.tasks=CH.tasks.filter(t=>t.status!=='done');saveChat();emit()}}>Clear done</button><button className="ghost small" onClick={()=>{CH.tasks=[];saveChat();emit()}}>Clear all</button></div></div>}
+      {dock==='queue'&&CH.queue.length>0&&<div className="dockpanel"><div className="mut small">Ctrl+Enter adds a message to the queue</div>{CH.queue.map((q,i)=><div key={i} className="row"><span className="grow small">{short(q.text||'Image attachment',100)}{q.images?.length?` · ${q.images.length} image${q.images.length===1?'':'s'}`:''}</span><button className="ghost small" onClick={()=>unqueue(i)}>×</button></div>)}</div>}
+      {dock==='sched'&&sched>0&&<div className="dockpanel">{(rt.scheduled||[]).slice(-30).reverse().map(t=><div key={t.id} className="tk"><span className="grow small"><b>{t.status}</b> · {new Date(t.due_at*1000).toLocaleString()} · {t.prompt}{t.result&&<div className="mut">{short(t.result,400)}</div>}{t.error&&<div className="err">{t.error}</div>}</span>
+        {['scheduled','running'].includes(t.status)&&<button className="ghost" onClick={()=>cancelSchedule(t.id)}>Cancel</button>}</div>)}</div>}
+      {(cmds.length>0||files.length>0)&&<div className="slash">{cmds.map(c=><button key={c[0]} onClick={()=>{setInput(c[0]+' ');ta.current?.focus()}}><b>{c[0]}</b> <span className="mut">{c[1]}</span></button>)}{files.map(([c,p])=><button key={p} onClick={()=>{setInput(`/${c.toLowerCase()} ${p} `);ta.current?.focus()}}><b>{p}</b> <span className="mut">file</span></button>)}</div>}
+      <div className="cbox">
+        {imgs.length>0&&<div className="imgs thumbs">{imgs.map(x=><span key={x.id}>{IMGS[x.id]&&<img src={IMGS[x.id]} alt=""/>}<button onClick={()=>setImgs(imgs.filter(y=>y.id!==x.id))} aria-label="Remove image">×</button></span>)}{!caps.vision&&<span className="mut small">The selected model can’t read images.</span>}</div>}
+        <textarea ref={ta} rows={1} value={input} placeholder={PLACEHOLDER[CH.mode]} onChange={e=>setInput(e.target.value)} onKeyDown={onKey} onPaste={e=>{const f=[...(e.clipboardData?.files||[])].filter(x=>/^image\//.test(x.type));if(f.length){e.preventDefault();addFiles(f)}}}/>
+        <div className="crow">
+          <button className="ib" title={caps.vision?'Attach an image':'Attach (needs a vision model to send)'} aria-label="Attach image" onClick={()=>fileIn.current.click()}><Icon d={ICONS.clip}/></button><input ref={fileIn} type="file" accept="image/*" multiple hidden onChange={e=>{addFiles(e.target.files);e.target.value=''}}/>
+          <Pop className="pill sm" up label="Mode" trigger={<>{mi[0]} {mi[1]}<Icon d={ICONS.chev} size={13}/></>}>{close=><div className="plist">{Object.entries(MODE_INFO).map(([k,[ic,n,d]])=><button key={k} className={'pitem tall'+(CH.mode===k?' sel':'')} onClick={()=>{setMode(k);close()}}><span className="mic">{ic}</span><span className="grow"><b>{n}</b><span className="mut small"> {d}</span></span>{CH.mode===k&&<Icon d={ICONS.check} size={14}/>}</button>)}</div>}</Pop>
+          {CH.mode==='leader'&&<select className="mini" value={ready.some(n=>n.name===CH.leader)?CH.leader:''} onChange={e=>{CH.leader=e.target.value;saveChat();emit()}} aria-label="Leader node"><option value="">👑 Auto</option>{ready.map(n=><option key={n.id} value={n.name}>👑 {n.name}</option>)}</select>}
+          {CH.mode==='software'&&<label className="mini mut">⏱<input type="number" min="0.1" max="720" disabled={sw.running||sw.going} value={CH.swMin} onChange={e=>{CH.swMin=+e.target.value||30;saveChat();emit()}}/>min</label>}
+          <span className="grow"/>{sw.label&&<span className="mut small swl">{sw.label}</span>}
+          <ContextRing s={ctx}/>
+          {busy&&!input.trim()&&!imgs.length?<button className="sendbtn" onClick={stop} aria-label="Stop" title="Stop"><Icon d={ICONS.stop} size={16} fill/></button>:<button className="sendbtn" disabled={!input.trim()&&!imgs.length} onClick={()=>submit(false)} aria-label={busy?'Queue':'Send'} title={busy?'Queue message':'Send'}><Icon d={ICONS.send} size={18}/></button>}
+        </div></div>
+    </div></footer>
   </div>;
 }
 function PlanBar(){

@@ -12,7 +12,7 @@ export default function Workspace({open,onClose}){
   const [tab,setTab]=useState(()=>{try{return localStorage.getItem('lc_wstab')||'tools'}catch{return 'tools'}});
   const pick=t=>{setTab(t);try{localStorage.setItem('lc_wstab',t)}catch{}};
   useEffect(()=>{if(open)loadTools()},[open]);
-  return <Dialog open={open} onClose={onClose} title="Workspace">
+  return <Dialog open={open} onClose={onClose} title="Workspace" wide>
     <div className="seg" role="tablist">{[['tools','Tools & settings'],['files','Files'],['term','Terminal']].map(([k,l])=><button key={k} role="tab" aria-selected={tab===k} className={tab===k?'on':''} onClick={()=>pick(k)}>{l}</button>)}<span className="grow"/><button className="ghost" onClick={onClose}>Close</button></div>
     {rt.toolinfo&&<p className="mut small">Workspace folder on the controller: <code>{rt.toolinfo.workspace}</code></p>}
     {tab==='tools'&&<ToolsPane key={ver>>8}/>}

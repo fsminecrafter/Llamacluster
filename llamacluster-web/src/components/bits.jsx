@@ -32,3 +32,12 @@ export function Segment({value,options,onChange,label}){
   return <div className="segc" role="radiogroup" aria-label={label} ref={ref}><i className="thumb" style={{transform:`translateX(${box.x}px)`,width:box.w}}/>
     {options.map(([v,l,t])=><button key={v} role="radio" aria-checked={v===value} title={t} className={v===value?'on':''} onClick={()=>onChange(v)}>{l}</button>)}</div>;
 }
+// Small popover: opens under (or above) its trigger, closes on outside click / Escape.
+export function Pop({trigger,children,up=false,align='left',className='',label}){
+  const [open,setOpen]=useState(false),ref=useRef();
+  useEffect(()=>{if(!open)return;const k=e=>{if(e.key==='Escape')setOpen(false)},c=e=>{if(!ref.current?.contains(e.target))setOpen(false)};document.addEventListener('keydown',k);document.addEventListener('mousedown',c);return()=>{document.removeEventListener('keydown',k);document.removeEventListener('mousedown',c)}},[open]);
+  return <span className={'pop '+className} ref={ref}><button className={'popbtn'+(open?' open':'')} aria-haspopup="true" aria-expanded={open} aria-label={label} onClick={()=>setOpen(!open)}>{trigger}</button>
+    {open&&<div className={'popmenu '+(up?'up ':'')+align}>{typeof children==='function'?children(()=>setOpen(false)):children}</div>}</span>;
+}
+export const Icon=({d,size=18,fill})=><svg viewBox="0 0 24 24" width={size} height={size} fill={fill?'currentColor':'none'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d}/></svg>;
+export const ICONS={back:'M15 18l-6-6 6-6',send:'M12 19V5M5 12l7-7 7 7',stop:'M7 7h10v10H7z',plus:'M12 5v14M5 12h14',sliders:'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4',chev:'M6 9l6 6 6-6',check:'M5 12l5 5 9-10',folder:'M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z',trash:'M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3',clip:'M21 12l-8.5 8.5a5 5 0 01-7-7L14 5a3.5 3.5 0 015 5l-8.5 8.5a2 2 0 01-3-3L15 8',copy:'M9 9h10v10H9zM5 15V5h10',redo:'M20 11a8 8 0 10-2.3 5.7M20 5v6h-6'};

@@ -76,3 +76,11 @@ pre.log{background:var(--bg);border:1px solid var(--line);border-radius:8px;padd
 .tmbox{height:340px;background:#0b0f14;border-radius:8px;padding:6px;overflow:hidden}
 .ctxmenu .row{flex-wrap:nowrap}.ctx.warn{color:var(--warn)}.ctx.crit{color:var(--bad)}
 @media(prefers-reduced-motion:reduce){.cc.run,.cc.err,.smark .arc,.lattice.on i{animation:none}.segc .thumb{transition:none}}
+/* ---- global polish */
+.top{backdrop-filter:blur(10px);background:color-mix(in srgb,var(--panel) 88%,transparent)}
+button,.btn,select,input,textarea{transition:border-color .15s,background .15s,color .15s,box-shadow .15s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--glow)}
+.dlg{border-radius:18px;box-shadow:0 24px 70px #0008;max-height:90dvh;overflow:auto}.dlg.wide{width:min(880px,94vw)}.dlg h2{font-size:18px}
+.wspane textarea{font-family:inherit}.seg{flex-wrap:wrap}.wsfiles{border:1px solid var(--line);border-radius:12px;padding:4px}
+.spot{border-radius:var(--r);transition:border-color .2s,transform .2s}.spot:hover{border-color:color-mix(in srgb,var(--acc) 40%,var(--line))}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px;border:2px solid transparent;background-clip:content-box}::-webkit-scrollbar-thumb:hover{background:var(--mut);background-clip:content-box;border:2px solid transparent}
