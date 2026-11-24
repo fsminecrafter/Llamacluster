@@ -1,7 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';import TLink from '../components/TLink.jsx';import {Link} from 'react-router-dom';import BlurText from '../components/BlurText.jsx';
 import {useNodes} from '../useNodes.js';import {useTheme,THEMES} from '../theme.jsx';import ShinyText from '../components/ShinyText.jsx';
 import ToolChip from '../components/ToolChip.jsx';import ContextRing from '../components/ContextRing.jsx';import Workspace from '../components/Workspace.jsx';import Agents from '../components/Agents.jsx';import Markdown from '../components/Markdown.jsx';import GlideSelect from '../components/GlideSelect.jsx';
-import {ThoughtLine,StatusMark,LatticeLoader,Pop,Icon,ICONS} from '../components/bits.jsx';
+import {ThoughtLine,StatusMark,LatticeLoader,WaveLoader,Pop,Icon,ICONS} from '../components/bits.jsx';
 import {CH,rt,emit,saveChat,setNodes,useChat,capsNow,readyNodes,short,IMGS,newId,idbPut,MODES} from '../chat/store.js';
 import {shrink} from '../chat/ctx.js';
 import {nodeModel} from '../chat/strength.js';
@@ -17,7 +17,7 @@ const PERMS=[['manual','✋ Manual','Ask before every tool call'],['semi','🛡 
 export default function Chat(){
   const {nodes}=useNodes(4000);const {ver}=useChat();const {theme,setTheme}=useTheme();
   const [input,setInput]=useState(''),[imgs,setImgs]=useState([]),[drop,setDrop]=useState(false),[ws,setWs]=useState(false),[files,setFiles]=useState([]),[dock,setDock]=useState(''),[,tick]=useState(0);
-  const [thinkingStyle,setThinkingStyle]=useState(()=>{try{return localStorage.getItem('lc_thinking_style')==='lattice'?'lattice':'classic'}catch{return 'classic'}});
+  const [thinkingStyle,setThinkingStyle]=useState(()=>{try{const style=localStorage.getItem('lc_thinking_style');return style==='lattice'||style==='wave'?style:'classic'}catch{return 'classic'}});
   const end=useRef(),fileIn=useRef(),stick=useRef(true),ta=useRef();
   useEffect(()=>setNodes(nodes),[nodes]);
   useEffect(()=>{loadTools();loadMsgImages();syncScheduled();const t=setInterval(()=>{syncScheduled()},20000);return()=>clearInterval(t)},[]);
@@ -69,8 +69,8 @@ export default function Chat(){
         <label className="dummy-option"><input type="checkbox" checked={!!CH.dummy} onChange={e=>setField('dummy',e.target.checked)}/><span><b>Use dummy AI model</b><span className="mut small">Simulates chat replies locally; no model server is needed.</span></span></label>
         <div className="plabel">Appearance</div>
         <div className="seg2">{THEMES.map(t=><button key={t.id} className={theme===t.id?'on':''} onClick={()=>setTheme(t.id)}>{t.label}</button>)}</div>
-        <label>Thinking animation<select value={thinkingStyle} onChange={e=>setThinkingStylePref(e.target.value)}><option value="classic">Current animation</option><option value="lattice">Lattice loader</option></select></label>
-        <div className="think-preview" aria-live="polite">{thinkingStyle==='lattice'?<><LatticeLoader on/><span>Thinking…</span></>:<><StatusMark state="run" size={14}/><ShinyText>Thinking…</ShinyText></>}</div>
+        <label>Thinking animation<select value={thinkingStyle} onChange={e=>setThinkingStylePref(e.target.value)}><option value="classic">Default</option><option value="lattice">Lattice loader</option><option value="wave">Wave animation</option></select></label>
+        <div className="think-preview" aria-live="polite">{thinkingStyle==='lattice'?<><LatticeLoader on/><span>Thinking…</span></>:thinkingStyle==='wave'?<><WaveLoader on/><ShinyText>Thinking…</ShinyText></>:<><StatusMark state="run" size={14}/><ShinyText>Thinking…</ShinyText></>}</div>
         <div className="plabel">Generation</div>
         <div className="col2"><label>Temperature<input type="number" step="0.1" min="0" max="2" value={CH.temp} onChange={e=>setField('temp',e.target.value===''?0.7:+e.target.value)}/></label>
           <label>Max tokens<input type="number" min="1" placeholder="no limit" value={CH.max} onChange={e=>setField('max',e.target.value===''?'':+e.target.value)}/></label></div>

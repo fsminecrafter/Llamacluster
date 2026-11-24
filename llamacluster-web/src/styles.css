@@ -62,7 +62,8 @@ pre.log{background:var(--bg);border:1px solid var(--line);border-radius:8px;padd
 @keyframes ccwipe{from{background-position:120% 0}to{background-position:-120% 0}}.cc.err{animation:shake .35s 1}@keyframes shake{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
 .cctime{margin-left:auto;font-variant-numeric:tabular-nums}
 .thoughtline>summary{display:flex;gap:6px;align-items:center;cursor:pointer}.thoughtbody{white-space:pre-wrap;margin-top:6px}
-.lattice{display:inline-grid;grid-template-columns:repeat(3,6px);grid-template-rows:repeat(3,6px);gap:2px;flex:none;vertical-align:middle}.lattice i{width:6px;height:6px;border-radius:50%;background:var(--line)}.lattice.on i{background:var(--tint,var(--acc));animation:lat 1s ease-in-out infinite}@keyframes lat{0%,100%{opacity:.25}50%{opacity:1}}
+.lattice{display:inline-grid;grid-template-columns:repeat(3,6px);grid-template-rows:repeat(3,6px);gap:2px;flex:none;vertical-align:middle}.lattice i{width:6px;height:6px;border-radius:50%;background:var(--line)}.lattice.on{animation:lattice-spin 1.2s linear infinite}.lattice.on i{background:var(--tint,var(--acc));opacity:.28}.lattice.on i:nth-child(-n+3){opacity:1}@keyframes lattice-spin{to{transform:rotate(360deg)}}
+.wave-loader{display:inline-flex;align-items:center;gap:2px;flex:none;vertical-align:middle}.wave-loader i{width:5px;height:12px;border-radius:2px;background:var(--line)}.wave-loader.on i{background:var(--tint,var(--acc));animation:wave 1s ease-in-out infinite}@keyframes wave{0%,100%{opacity:.25}50%{opacity:1}}
 .segc{position:relative;display:inline-flex;border:1px solid var(--line);border-radius:99px;background:var(--panel2);padding:2px;flex-wrap:wrap}
 .segc .thumb{position:absolute;top:2px;bottom:2px;left:0;border-radius:99px;background:var(--acc);transition:transform .28s cubic-bezier(.3,1.5,.5,1),width .28s}
 .segc button{position:relative;background:transparent;border:0;border-radius:99px;padding:3px 10px;font-size:12px}.segc button.on{color:var(--on-acc);font-weight:600}
@@ -75,7 +76,7 @@ pre.log{background:var(--bg);border:1px solid var(--line);border-radius:8px;padd
 .wsrow{padding:4px 6px;border-radius:6px;cursor:pointer;flex-wrap:nowrap}.wsrow:hover{background:var(--panel2)}.wsfiles{max-height:46vh;overflow:auto}
 .tmbox{height:340px;background:#0b0f14;border-radius:8px;padding:6px;overflow:hidden}
 .ctxmenu .row{flex-wrap:nowrap}.ctx.warn{color:var(--warn)}.ctx.crit{color:var(--bad)}
-@media(prefers-reduced-motion:reduce){.cc.run,.cc.err,.smark .arc,.lattice.on i{animation:none}.segc .thumb{transition:none}}
+@media(prefers-reduced-motion:reduce){.cc.run,.cc.err,.smark .arc,.lattice.on,.wave-loader.on i{animation:none}.segc .thumb{transition:none}}
 /* ---- global polish */
 .top{backdrop-filter:blur(10px);background:color-mix(in srgb,var(--panel) 88%,transparent)}
 button,.btn,select,input,textarea{transition:border-color .15s,background .15s,color .15s,box-shadow .15s}
