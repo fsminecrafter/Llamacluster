@@ -51,6 +51,23 @@ Per node you can: pick a model, change settings (context, GPU layers, threads, p
 batch sizes, any extra `llama-server` flags), start/stop, view logs, and **install models**
 (Hugging Face search, or a direct `.gguf` URL — downloaded straight onto that node).
 
+**Use this device (WebGPU).** **Add node → Use this device (WebGPU)** turns the browser tab you are looking at into a node:
+pick a prebuilt model (served by [WebLLM](https://github.com/mlc-ai/web-llm), downloaded once and cached by the browser) and it
+runs on this device's GPU, with nothing to install. It then shows up like any other node (cards, the model dropdown in chat, the
+`/v1` gateway and chat runs all route to it, and Stop in the chat interrupts it). How it works: a page can't accept connections,
+so the tab registers with the controller, long-polls for chat requests and streams the OpenAI chunks back (`/api/browser-nodes/…`).
+Things to know:
+* WebGPU needs a **secure origin**: open the UI as `http://localhost:7870` on the controller itself, or serve it over https. On
+  another device over plain `http://<lan-ip>` the browser hides WebGPU; in Chrome/Edge you can allow that one address in
+  `chrome://flags/#unsafely-treat-insecure-origin-as-secure`. The panel explains this when it applies.
+* It lives as long as the tab: closing or reloading it removes the node (an unreachable one is dropped after ~10 minutes).
+  "Keep this device awake" holds a screen wake lock while sharing, so phones and laptops don't sleep out of the cluster.
+* Text chat only: no tool calling (the model just answers), one request at a time, the model's own context (usually 4096), and
+  models that need GPU 16-bit shaders (`q4f16`) are only offered when the GPU supports them. Vision models (Phi-3.5 vision)
+  can read images. The node can't take part in RPC/distributed models or receive installed `.gguf` files.
+* The first load needs access to huggingface.co and github.com from that browser. Only the new React UI has the button
+  (not the `--classic` ui.html).
+
 **Workspace → Tools → Worker services** can install or uninstall a Linux systemd user autostart service on configured worker nodes, restart all workers, or update each worker with `git pull --ff-only origin main` and restart it. Installation asks for a shared worker token and whether the selected controller node also runs a worker. Only nodes whose reported OS is Linux are sent an install request; the worker also checks for a usable systemd user manager before writing its service and can discover `/run/user/<uid>` when an SSH session omits `XDG_RUNTIME_DIR`. Run the worker as the account that should own the service; user services start on login, and headless boot may require enabling lingering for that account with `sudo loginctl enable-linger USER`. Updates refuse dirty git checkouts and require a Linux worker with a clean LlamaCluster clone and Git access to `origin/main`. Restarts preserve and relaunch the active model with its current settings.
 
 **Downloads survive power cuts and network drops.** A dropped connection is retried automatically with backoff and
@@ -406,7 +423,7 @@ Under **Other tools** (on by default), `spawn` can bring a persistent model into
 
 **🌐 Playwright** (`playwright`, off by default) is available when a saved `.html` or `.htm` file is open in Workspace → Files. It runs that open file with Playwright, returning console output and a screenshot to vision-capable models. Save editor changes before calling it. Workspace files can be downloaded individually from their rows, or together with **↓ ZIP**; the archive includes hidden files and skips symlinks.
 
-Page-side tests: `node tests/test_tools.js`, `node tests/test_modes.js` and `node tests/test_chat_features.js`; the registry: `python3 -m unittest discover -s tests`.
+Page-side tests: `node tests/test_tools.js`, `node tests/test_modes.js` and `node tests/test_chat_features.js`; the registry: `python3 -m unittest discover -s tests`. The WebGPU browser node is covered by `tests/test_browser_node.py` (protocol) and `node tests/test_webgpu_node.mjs` (browser-side client against a real controller, with a fake engine).
 
 New optional tools only need an `optional={...}` entry in `tools.py`; the UI picks them up automatically (tools that need the
 page, like the two above, also need handling in `runTool` in `ui.html`).

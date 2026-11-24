@@ -131,6 +131,12 @@ def _chat_run_worker(run, body, candidates):
         inflight[node["id"]] = inflight.get(node["id"], 0) + 1
         c = None
         try:
+            if node.get("kind") == "browser":
+                err = _chat_run_browser(run, node, body)
+                if err:
+                    last_error = err
+                    continue
+                break
             c, prefix = conn_for(node["url"], 600)
             with run.condition:
                 run.connection = c
@@ -412,7 +418,7 @@ def save():
     os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
     tmp = STATE_FILE + ".tmp"
     with open(tmp, "w") as f:
-        json.dump(list(nodes.values()), f, indent=2)
+        json.dump([n for n in nodes.values() if n.get("kind") != "browser"], f, indent=2)   # browser nodes live as long as their tab
     os.chmod(tmp, 0o600)  # contains worker tokens
     os.replace(tmp, STATE_FILE)
 
@@ -448,6 +454,17 @@ def poll_loop():
         with lock:
             snap = list(nodes.values())
         def one(n):
+            if n.get("kind") == "browser":          # no URL to call: the tab reports in by itself
+                bn = bnodes.get(n["id"])
+                if bn is not None and bnode_alive(bn):
+                    status[n["id"]] = bnode_status(bn)
+                else:
+                    status[n["id"]] = {"ok": False, "data": None, "seen": time.time(),
+                                       "error": "the browser tab is not connected (closed, asleep or offline)"}
+                    if bn is not None and time.time() - bn.seen > BROWSER_FORGET_S:
+                        bnode_remove(n["id"])
+                        bnodes_removed.discard(n["id"])   # forgotten, not removed by the user: the tab may re-register
+                return
             try:
                 code, d = call_node(n, "GET", "/api/status", timeout=6)
                 if code == 200:
@@ -493,6 +510,8 @@ def cluster_worker_action(action, body):
         host_status = {nid: status.get(nid, {}).get("data") or {} for nid in nodes}
 
     def apply(node):
+        if node.get("kind") == "browser":
+            return {"node": node["name"], "status": "skipped", "message": "browser nodes have no worker service"}
         if controller_node == node["id"] and not controller_is_worker:
             return {"node": node["name"], "status": "skipped",
                     "message": "controller host excluded (not configured as a worker)"}
@@ -558,6 +577,299 @@ def discover(port=7860, timeout=0.35):
     return found
 
 
+# ------------------------------------------------- browser nodes (WebGPU)
+# A browser tab can't accept connections, so a "browser node" works the other way round: the tab (llamacluster-web,
+# src/webgpu/node.js) registers itself, long-polls /api/browser-nodes/<id>/poll for chat requests, runs them on the
+# GPU with WebLLM and posts the streamed OpenAI chunks back. To the rest of the controller (status, balancer, gateway,
+# chat runs) it looks like any other node of kind "browser". They are never saved: they live as long as the tab.
+BROWSER_TTL = 15.0         # no poll / heartbeat for this long -> the node counts as offline
+BROWSER_PICKUP_S = 25.0    # a queued request the tab didn't pick up in this time fails, so the gateway can try another node
+BROWSER_FORGET_S = 600.0   # an offline browser node is dropped after this long (the tab re-registers when it wakes)
+BROWSER_MAX_CHUNKS = 4000  # chunks accepted per job post
+bnodes = {}                # node id -> BrowserNode
+bnodes_removed = set()     # ids removed on the controller; their tab is told (HTTP 410) to stop sharing
+
+
+class BrowserNodeError(Exception):
+    def __init__(self, message, retryable=False):
+        super().__init__(message)
+        self.retryable = retryable      # nothing was produced yet, so another node may take the request
+
+
+class BrowserJob:
+    def __init__(self, body):
+        self.id = uuid.uuid4().hex[:12]
+        self.body = body
+        self.created = time.time()
+        self.taken = False
+        self.chunks = []          # OpenAI chat.completion.chunk dicts not yet consumed
+        self.done = False
+        self.error = None
+        self.cancelled = False
+        self.cancel_sent = False
+
+
+class BrowserNode:
+    def __init__(self, nid, name, client_id):
+        self.id = nid
+        self.name = name
+        self.client_id = client_id
+        self.created = self.seen = time.time()
+        self.info = {}            # last heartbeat: state, model, progress, text, gpu, ctx, vision, cores, ...
+        self.queue = []           # jobs waiting for the tab
+        self.jobs = {}            # id -> BrowserJob (queued, running, or cancelled but not yet told to the tab)
+        self.removed = False
+        self.cond = threading.Condition()
+
+
+def bnode_alive(bn):
+    return not bn.removed and time.time() - bn.seen < BROWSER_TTL
+
+
+_BINFO_STR = ("state", "model", "text", "error", "label")
+_BINFO_NUM = ("progress", "ctx", "cores", "size_mb", "memory_gb")
+
+
+def bnode_clean_info(raw):
+    """Whitelist what a tab may report about itself (it is shown in the UI and read by the balancer)."""
+    out = {}
+    if not isinstance(raw, dict):
+        return out
+    for k in _BINFO_STR:
+        if isinstance(raw.get(k), str):
+            out[k] = raw[k][:300]
+    for k in _BINFO_NUM:
+        if isinstance(raw.get(k), (int, float)) and not isinstance(raw.get(k), bool) and math.isfinite(raw[k]):
+            out[k] = raw[k]
+    for k in ("vision", "tools", "busy"):
+        if isinstance(raw.get(k), bool):
+            out[k] = raw[k]
+    if isinstance(raw.get("gpu"), dict):
+        out["gpu"] = {k: str(v)[:120] for k, v in raw["gpu"].items() if k in ("name", "vendor", "architecture") and v}
+    return out
+
+
+def bnode_status(bn):
+    """The same shape a worker's /api/status has, as far as the UI and the balancer read it."""
+    i = bn.info
+    state = {"ready": "ready", "loading": "loading"}.get(i.get("state"), "stopped")
+    model = i.get("model") or ""
+    gpu = i.get("gpu") or {}
+    cfg = {"model": model, "ctx_size": int(i.get("ctx") or 4096), "parallel": 1, "gpu_layers": 99} if model and state != "stopped" else None
+    return {"ok": True, "seen": bn.seen, "error": None, "data": {
+        "name": bn.name, "version": "browser", "os": "Browser",
+        "hardware": {"cpu_count": int(i.get("cores") or 0), "ram_total_mb": 0, "ram_free_mb": 0,
+                     "gpus": [{"name": gpu.get("name") or "WebGPU", "vram_total_mb": 0, "vram_used_mb": 0}]},
+        "ips": [], "llama_server_found": False, "rpc_server_found": False,
+        "server": {"state": state, "config": cfg, "uptime_s": 0, "inflight": 0,   # gateway in-flight is counted by `inflight`
+                   "vision": bool(i.get("vision")) and state == "ready"},
+        "rpc": {"running": False, "port": None},
+        "models": [{"name": model, "size_mb": int(i.get("size_mb") or 0)}] if model and state != "stopped" else [],
+        "mmprojs": [], "bench": {}, "bench_job": {}, "downloads": [],
+        "browser": {"client_id": bn.client_id, "state": i.get("state") or "idle", "progress": i.get("progress"),
+                    "text": i.get("text") or "", "error": i.get("error") or "", "label": i.get("label") or "",
+                    "tools": bool(i.get("tools")), "memory_gb": i.get("memory_gb"), "queued": len(bn.queue),
+                    "busy": bool(i.get("busy"))}}}
+
+
+def bnode_register(name, client_id, info):
+    client_id = str(client_id or "")[:64]
+    with lock:
+        node = next((n for n in nodes.values() if n.get("kind") == "browser" and client_id and n.get("client_id") == client_id), None)
+        if node is None:
+            nid = uuid.uuid4().hex[:8]
+            taken = {n["name"] for n in nodes.values()}
+            base = (str(name or "").strip() or "This device")[:60]
+            unique, k = base, 2
+            while unique in taken:
+                unique, k = f"{base} ({k})", k + 1
+            node = {"id": nid, "name": unique, "url": "browser://" + nid, "token": "", "kind": "browser", "client_id": client_id}
+            nodes[nid] = node
+        bn = bnodes.get(node["id"])
+        if bn is None:
+            bn = bnodes[node["id"]] = BrowserNode(node["id"], node["name"], client_id)
+        bnodes_removed.discard(node["id"])
+        with bn.cond:
+            bn.seen = time.time()
+            bn.info = bnode_clean_info(info)
+        status[node["id"]] = bnode_status(bn)
+    return node
+
+
+def bnode_remove(nid):
+    with lock:
+        nodes.pop(nid, None)
+        status.pop(nid, None)
+        bn = bnodes.pop(nid, None)
+        bnodes_removed.add(nid)
+        if len(bnodes_removed) > 200:
+            bnodes_removed.clear()
+            bnodes_removed.add(nid)
+    if bn:
+        with bn.cond:
+            bn.removed = True
+            bn.cond.notify_all()
+
+
+def bnode_heartbeat(bn, info):
+    with bn.cond:
+        bn.seen = time.time()
+        if info is not None:
+            bn.info = bnode_clean_info(info)
+        cancel = _bnode_take_cancels(bn)
+        bn.cond.notify_all()
+    status[bn.id] = bnode_status(bn)
+    return cancel
+
+
+def _bnode_take_cancels(bn):
+    """Ids of cancelled jobs the tab hasn't been told about yet (call with bn.cond held)."""
+    now = time.time()
+    out = []
+    for j in list(bn.jobs.values()):
+        if j.cancelled and j.taken and not j.cancel_sent:
+            j.cancel_sent = True
+            out.append(j.id)
+            bn.jobs.pop(j.id, None)
+        elif j.cancelled and not j.taken:
+            bn.jobs.pop(j.id, None)
+        elif j.cancelled and now - j.created > 300:
+            bn.jobs.pop(j.id, None)
+    return out
+
+
+def bnode_poll(bn, wait):
+    """Long poll from the tab: hands out the next queued job (the tab runs them one at a time) and tells it which
+    jobs to abort. Polling is also the tab's liveness signal, so it keeps `seen` fresh while it waits."""
+    deadline = time.monotonic() + max(0.0, min(20.0, wait))
+    with bn.cond:
+        while True:
+            bn.seen = time.time()
+            cancel = _bnode_take_cancels(bn)
+            job = None
+            while bn.queue and job is None:
+                cand = bn.queue.pop(0)
+                if not cand.cancelled:
+                    cand.taken = True
+                    job = cand
+            remaining = deadline - time.monotonic()
+            if cancel or job or bn.removed or remaining <= 0:
+                break
+            bn.cond.wait(min(1.0, remaining))
+        return {"jobs": [{"id": job.id, "body": job.body}] if job else [], "cancel": cancel, "removed": bn.removed}
+
+
+def bnode_job_update(bn, job_id, chunks, done, error):
+    with bn.cond:
+        job = bn.jobs.get(job_id)
+        if job is None or job.cancelled:
+            return False
+        bn.seen = time.time()
+        for c in (chunks or [])[:BROWSER_MAX_CHUNKS]:
+            if isinstance(c, dict):
+                job.chunks.append(c)
+        if done:
+            job.done = True
+            job.error = (str(error)[:500] if error else None)
+        bn.cond.notify_all()
+        return True
+
+
+def bnode_stream(bn, body, cancelled=lambda: False):
+    """Run one chat request on a browser node and yield its OpenAI chunk dicts. Raises BrowserNodeError;
+    `retryable` is set while nothing has been produced, so the caller may hand the request to another node."""
+    job = BrowserJob(body)
+    with bn.cond:
+        if not bnode_alive(bn):
+            raise BrowserNodeError("browser tab is not connected", True)
+        if bn.info.get("state") != "ready":
+            raise BrowserNodeError("no model is loaded in the browser tab", True)
+        bn.jobs[job.id] = job
+        bn.queue.append(job)
+        bn.cond.notify_all()
+    produced = False
+    try:
+        while True:
+            if cancelled():
+                return
+            with bn.cond:
+                while not job.chunks and not job.done:
+                    if cancelled():
+                        return
+                    if not bnode_alive(bn):
+                        raise BrowserNodeError("browser tab went offline", not produced)
+                    if not job.taken and time.time() - job.created > BROWSER_PICKUP_S:
+                        raise BrowserNodeError("browser tab did not pick up the request (asleep?)", True)
+                    bn.cond.wait(1.0)
+                chunks, job.chunks = job.chunks, []
+                done, error = job.done, job.error
+            for c in chunks:
+                produced = True
+                yield c
+            if done:
+                if error:
+                    raise BrowserNodeError(error, not produced)
+                return
+    finally:
+        with bn.cond:
+            if not job.done:
+                job.cancelled = True       # the tab hears about it on its next poll / heartbeat
+                if job in bn.queue:
+                    bn.queue.remove(job)
+            else:
+                bn.jobs.pop(job.id, None)
+            bn.cond.notify_all()
+
+
+def bnode_collect(chunks, model):
+    """Fold streamed chunks into one non-streaming chat completion."""
+    content, reasoning, finish, usage, cid = [], [], None, None, None
+    for c in chunks:
+        cid = cid or c.get("id")
+        for ch in c.get("choices") or []:
+            d = ch.get("delta") or {}
+            if d.get("content"):
+                content.append(d["content"])
+            if d.get("reasoning_content"):
+                reasoning.append(d["reasoning_content"])
+            if ch.get("finish_reason"):
+                finish = ch["finish_reason"]
+        if c.get("usage"):
+            usage = c["usage"]
+    msg = {"role": "assistant", "content": "".join(content)}
+    if reasoning:
+        msg["reasoning_content"] = "".join(reasoning)
+    return {"id": cid or "chatcmpl-" + uuid.uuid4().hex[:12], "object": "chat.completion", "created": int(time.time()),
+            "model": model, "choices": [{"index": 0, "message": msg, "finish_reason": finish or "stop"}], "usage": usage or {}}
+
+
+def _chat_run_browser(run, node, body):
+    """Feed a browser node's output into a chat run. Returns None when the run is finished (ok, cancelled or failed
+    for good) or an error string when the next candidate node should be tried."""
+    bn = bnodes.get(node["id"])
+    if bn is None:
+        return f"{node['name']}: browser node is gone"
+    gen = bnode_stream(bn, body, cancelled=lambda: run.cancelled)
+    try:
+        for chunk in gen:
+            if not run.node:
+                run.node = node["name"]
+            if not run.append("data: " + json.dumps(chunk) + "\n") or not run.append("\n"):
+                return None
+        if not run.cancelled:
+            run.node = run.node or node["name"]
+            run.append("data: [DONE]\n")
+            run.append("\n")
+        return None
+    except BrowserNodeError as e:
+        if e.retryable and not run.node:
+            return f"{node['name']}: {e}"
+        run.error = f"{node['name']}: {e}"
+        return None
+    finally:
+        gen.close()
+
+
 # --------------------------------------------------------------- gateway
 def ready_nodes(model_hint=None):
     out = []
@@ -565,6 +877,8 @@ def ready_nodes(model_hint=None):
         s = status.get(n["id"])
         if not (s and s.get("ok") and s["data"]["server"]["state"] == "ready"):
             continue
+        if n.get("kind") == "browser" and not (n["id"] in bnodes and bnode_alive(bnodes[n["id"]])):
+            continue        # status is refreshed every POLL_S; a tab that just went quiet must not be picked meanwhile
         cfg = s["data"]["server"].get("config") or {}
         out.append((n, cfg.get("model", "")))
     if model_hint:
@@ -934,6 +1248,8 @@ class H(BaseHTTPRequestHandler):
                         return self._json(200, tools.clear_workspace())
                 except tools.ToolError as e:
                     return self._json(400, {"error": str(e)})
+            if path == "/api/browser-nodes" or path.startswith("/api/browser-nodes/"):
+                return self._browser_nodes(method, path)
             if path == "/api/nodes" and method == "GET":
                 return self._json(200, [node_view(n) for n in list(nodes.values())])
             if path == "/api/nodes" and method == "POST":
@@ -961,9 +1277,14 @@ class H(BaseHTTPRequestHandler):
                 if not node:
                     return self._json(404, {"error": "no such node"})
                 if rest == "" and method == "DELETE":
+                    if node.get("kind") == "browser":
+                        bnode_remove(nid)       # the tab hears about it on its next poll and stops sharing
+                        return self._json(200, {"ok": True})
                     with lock:
                         nodes.pop(nid, None); status.pop(nid, None); save()
                     return self._json(200, {"ok": True})
+                if node.get("kind") == "browser" and rest != "update":
+                    return self._json(400, {"error": "this node is a browser tab: change its model or stop sharing in that tab"})
                 if rest == "logs":
                     code, d = call_node(node, "GET", "/api/logs")
                     return self._json(code, d)
@@ -995,6 +1316,43 @@ class H(BaseHTTPRequestHandler):
             return self._json(404, {"error": "not found"})
         except Exception as e:
             return self._json(500, {"error": f"{type(e).__name__}: {e}"})
+
+    # -- browser nodes (this device, WebGPU) - see "browser nodes" above
+    def _browser_nodes(self, method, path):
+        if not self._origin_ok():
+            return self._json(403, {"error": "cross-origin request refused"})
+        parts = [p for p in path[len("/api/browser-nodes"):].split("/") if p]
+        b = self._body() if method == "POST" else {}     # always read the body: keep-alive connections must stay in sync
+        if not parts:
+            if method != "POST":
+                return self._json(405, {"error": "method not allowed"})
+            node = bnode_register(b.get("name"), b.get("client_id"), b.get("info"))
+            return self._json(200, {"id": node["id"], "name": node["name"]})
+        nid, rest = parts[0], parts[1:]
+        bn = bnodes.get(nid)
+        if bn is None:
+            if nid in bnodes_removed:
+                return self._json(410, {"error": "this node was removed", "removed": True})
+            return self._json(404, {"error": "unknown browser node (the controller restarted?): register again"})
+        if not rest and method == "DELETE":
+            bnode_remove(nid)
+            return self._json(200, {"ok": True})
+        if rest == ["hb"] and method == "POST":
+            return self._json(200, {"ok": True, "cancel": bnode_heartbeat(bn, b.get("info"))})
+        if rest == ["poll"] and method == "GET":
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            try:
+                wait = float((q.get("wait") or ["15"])[0])
+            except ValueError:
+                return self._json(400, {"error": "wait must be a number"})
+            res = bnode_poll(bn, wait)
+            if res["removed"]:
+                return self._json(410, {"error": "this node was removed", "removed": True})
+            return self._json(200, res)
+        if len(rest) == 2 and rest[0] == "jobs" and method == "POST":
+            ok = bnode_job_update(bn, rest[1], b.get("chunks"), b.get("done") is True, b.get("error"))
+            return self._json(200 if ok else 404, {"ok": ok})
+        return self._json(404, {"error": "not found"})
 
     # -- browser terminal (xterm.js) - see term.py
     def _terminal(self, method, path):
@@ -1038,7 +1396,10 @@ class H(BaseHTTPRequestHandler):
         """Copy one installed model from a source node to several target nodes (node -> node over the LAN)."""
         with lock:
             src = nodes.get(b.get("source"))
-            targets = [nodes[i] for i in (b.get("targets") or []) if i in nodes and i != b.get("source")]
+            targets = [nodes[i] for i in (b.get("targets") or []) if i in nodes and i != b.get("source")
+                       and nodes[i].get("kind") != "browser"]
+        if src and src.get("kind") == "browser":
+            return self._json(400, {"error": "a browser node has no model files to send"})
         name = b.get("name") or ""
         if not src or not name or not targets:
             return self._json(400, {"error": "source, name and at least one other target node are required"})
@@ -1091,6 +1452,8 @@ class H(BaseHTTPRequestHandler):
         cfg = b.get("config") or {}
         if not head or not cfg.get("model"):
             return self._json(400, {"error": "head node and model required"})
+        if head.get("kind") == "browser" or any(h.get("kind") == "browser" for h in helpers):
+            return self._json(400, {"error": "browser (WebGPU) nodes can't take part in a distributed RPC model"})
         rpc_addrs = []
         for h in helpers:
             s = status.get(h["id"], {})
@@ -1108,12 +1471,76 @@ class H(BaseHTTPRequestHandler):
 
     def _stop_all(self):
         for n in list(nodes.values()):
+            if n.get("kind") == "browser":
+                continue
             try:
                 call_node(n, "POST", "/api/stop")
                 call_node(n, "POST", "/api/rpc/stop")
             except Exception:
                 pass
         return self._json(200, {"ok": True})
+
+    def _gateway_browser(self, node, raw):
+        """Serve one /v1/chat/completions request on a browser node. True when the reply was written (success or a
+        final error), else an error string so _gateway tries the next node."""
+        bn = bnodes.get(node["id"])
+        if bn is None:
+            return f"{node['name']}: browser node is gone"
+        try:
+            req = json.loads(raw or b"{}")
+            if not isinstance(req, dict):
+                raise ValueError("body must be a JSON object")
+        except ValueError as e:
+            self._json(400, {"error": {"message": "invalid JSON body: " + str(e)}})
+            return True
+        stream = bool(req.get("stream"))
+        gen = bnode_stream(bn, req)
+        started = False
+        try:
+            def begin(ctype):
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("X-LlamaCluster-Node", node["name"])
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.close_connection = True
+            if stream:
+                for chunk in gen:
+                    if not started:
+                        begin("text/event-stream")
+                        started = True
+                    self.wfile.write(b"data: " + json.dumps(chunk).encode("utf8") + b"\n\n")
+                    self.wfile.flush()
+                if not started:
+                    begin("text/event-stream")
+                    started = True
+                self.wfile.write(b"data: [DONE]\n\n")
+                self.wfile.flush()
+                return True
+            data = json.dumps(bnode_collect(gen, str(req.get("model") or ""))).encode("utf8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("X-LlamaCluster-Node", node["name"])
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(data)
+            return True
+        except BrowserNodeError as e:
+            if started:      # bytes already sent: end the stream with an error event instead of failing over
+                try:
+                    self.wfile.write(b"data: " + json.dumps({"error": {"message": f"{node['name']}: {e}"}}).encode("utf8") + b"\n\n")
+                    self.wfile.flush()
+                except OSError:
+                    pass
+                return True
+            if e.retryable:
+                return f"{node['name']}: {e}"
+            self._json(502, {"error": {"message": f"{node['name']}: {e}"}})
+            return True
+        finally:
+            gen.close()
 
     # -- OpenAI-compatible gateway
     def _gateway(self, method, path):
@@ -1137,6 +1564,8 @@ class H(BaseHTTPRequestHandler):
             pool = [n for n in ready_nodes() if target in (n["id"], n["name"])]
         else:
             pool = ready_nodes(hint)
+        if not (method == "POST" and path == "/v1/chat/completions"):   # browser nodes only serve chat completions
+            pool = [n for n in pool if n.get("kind") != "browser"]
         cands = pick_order(pool) if pool else []
         if not cands:
             return self._json(503, {"error": {"message": "no ready node" + (" named " + target if target else "") + " - start a model on at least one node"}})
@@ -1145,6 +1574,12 @@ class H(BaseHTTPRequestHandler):
             inflight[node["id"]] = inflight.get(node["id"], 0) + 1
             started = False
             try:
+                if node.get("kind") == "browser":
+                    res = self._gateway_browser(node, body)
+                    if res is True:
+                        return
+                    last_err = res
+                    continue
                 c, prefix = conn_for(node["url"], 600)
                 hdrs = {"Content-Type": self.headers.get("Content-Type", "application/json")}
                 if node.get("token"):

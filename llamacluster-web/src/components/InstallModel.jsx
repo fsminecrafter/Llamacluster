@@ -1,7 +1,7 @@
 import React,{useState} from 'react';import Dialog from './Dialog.jsx';import {api} from '../api.js';
 const hf=u=>fetch('https://huggingface.co/api/'+u).then(r=>r.json());
 export default function InstallModel({open,onClose,nodes,refresh,preset}){
-  const online=nodes.filter(n=>n.online);
+  const online=nodes.filter(n=>n.online&&n.kind!=='browser');   // browser (WebGPU) nodes load their own models
   const [q,setQ]=useState('');const [res,setRes]=useState([]);const [f,setF]=useState({repo:'',filename:'',url:''});const [sel,setSel]=useState({});const [err,setErr]=useState('');const [busy,setBusy]=useState(false);
   const targets=online.filter(n=>sel[n.id]??n.id===preset).map(n=>n.id);
   const search=async()=>{if(!q.trim())return;setBusy(true);try{setRes((await hf(`models?search=${encodeURIComponent(q)}&filter=gguf&sort=downloads&limit=15`)).map(m=>({label:m.id,sub:'↓'+m.downloads,repo:m.id})))}catch(e){setErr('Search failed: '+e.message)}setBusy(false)};
