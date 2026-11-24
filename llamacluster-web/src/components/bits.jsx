@@ -17,11 +17,19 @@ export function CallChip({state,label,detail,children}){
   const ms=useClock(state==='run'),[t0]=useState(Date.now()),cls=state==='run'?'run':state==='err'?'err':'ok';
   return <details className={'tc cc '+cls}><summary><StatusMark state={state}/><span className="tcv">{label}</span><span className="tct">{detail}</span>{state==='run'&&<span className="mut small cctime">{fmtDur(ms)||'…'}</span>}</summary>{children}</details>;
 }
-// Reasoning trace header with a live clock; folds into one line when the reply starts.
-export function ThoughtLine({text,live}){
+// Collapsible reasoning trace header with a live clock.
+export function ThoughtLine({text,live,style='classic'}){
   const ms=useClock(live),[final,setFinal]=useState(0);useEffect(()=>{if(!live&&ms)setFinal(ms)},[live,ms]);
   const steps=String(text||'').split(/\n{2,}/).filter(Boolean);
-  return <details className="think thoughtline" open={live||undefined}><summary><StatusMark state={live?'run':'ok'} size={14}/>{live?'Thinking':'Thought'}{(live?ms:final)>=1000&&<span className="mut small"> · {fmtDur(live?ms:final)}</span>}{!live&&steps.length>1&&<span className="mut small"> · {steps.length} steps</span>}</summary><div className="thoughtbody">{text}</div></details>;
+  return <details className="think thoughtline">
+    <summary>
+      {style==='lattice'?<LatticeLoader on={live}/>:<StatusMark state={live?'run':'ok'} size={14}/>}
+      {live?'Thinking':'Thought'}
+      {(live?ms:final)>=1000&&<span className="mut small"> · {fmtDur(live?ms:final)}</span>}
+      {!live&&steps.length>1&&<span className="mut small"> · {steps.length} steps</span>}
+    </summary>
+    <div className="thoughtbody">{text||'No reasoning text has arrived yet.'}</div>
+  </details>;
 }
 // A lattice of cells that brightens in a wave while an agent works.
 export function LatticeLoader({on,cells=8}){return <span className={'lattice'+(on?' on':'')} aria-hidden>{Array.from({length:cells},(_,i)=><i key={i} style={{animationDelay:i*90+'ms'}}/>)}</span>}
