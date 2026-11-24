@@ -16,19 +16,33 @@ export const AUTO_COMPACT_PCT=97;
 const btwControllers=new Map();let btwSeq=0;
 export const lastUserText=()=>{for(let i=CH.msgs.length-1;i>=0;i--)if(CH.msgs[i].role==='user'&&!CH.msgs[i].auto&&!CH.msgs[i].agentName)return CH.msgs[i].content;return ''};
 export const notice=text=>{CH.msgs.push({role:'assistant',local:true,content:text});saveChat();emit()};
-function dummyResponse(text,images=[]){
-  const received=text?(text.length>500?text.slice(0,500)+'… [truncated]':text):'an image attachment';
-  const attachments=images.length?` (${images.length} image${images.length===1?'':'s'} received; not analyzed in dummy mode)`: '';
-  return `Dummy AI response — generated locally without a model request.\n\nI received: ${received}${attachments}`;
+const DUMMY_ANSWERS=[
+  'Absolutely. Start with one small step, then build from there.',
+  'The simplest approach is often the easiest to test.',
+  'Try breaking the problem into smaller pieces and checking each one.',
+  'A quick experiment should give you a useful signal.',
+  'Write down the goal, then test one change at a time.'
+];
+function dummyResponse(images=[]){
+  const answer=DUMMY_ANSWERS[Math.floor(Math.random()*DUMMY_ANSWERS.length)];
+  const attachments=images.length?`\n\n${images.length} image${images.length===1?'':'s'} received; not analyzed in dummy mode.`:'';
+  return `Dummy AI: ${answer}${attachments}`;
+}
+function waitForDummy(signal,ms){
+  return new Promise(resolve=>{
+    if(signal.aborted){resolve(false);return}
+    let timer;
+    const onAbort=()=>{clearTimeout(timer);resolve(false)};
+    timer=setTimeout(()=>{signal.removeEventListener('abort',onAbort);resolve(true)},ms);
+    signal.addEventListener('abort',onAbort,{once:true});
+  });
 }
 async function dummyReply(signal){
   const user=[...CH.msgs].reverse().find(m=>m.role==='user'&&!m.auto&&!m.agentName);
   const a={role:'assistant',content:'',node:'Dummy AI',streaming:true};CH.msgs.push(a);emit();
-  const response=dummyResponse(user?.content||'',user?.images||[]);
-  for(let i=0;i<response.length;i+=48){
-    if(signal.aborted){if(!signal.cleared)a.stopped=true;break}
-    a.content+=response.slice(i,i+48);emit();await sleep(16);
-  }
+  const completed=await waitForDummy(signal,2000+Math.floor(Math.random()*8001));
+  if(completed&&!signal.aborted)a.content=dummyResponse(user?.images||[]);
+  else if(!signal.cleared)a.stopped=true;
   delete a.streaming;
   if(CH.mode==='plan'&&!a.stopped&&!signal.aborted)a.plan='pending';
   emit();return a;
@@ -550,7 +564,7 @@ function dispatchBtw(text){const m=/^\/btw(?:\s+([\s\S]+))?$/i.exec(text);if(!m)
 async function runBtw(q){
   const id=++btwSeq,ctl=new AbortController(),entry={id:'btw'+id,q,a:'',state:'run'};btwControllers.set(id,ctl);CH.btw.push(entry);emit();
   try{
-    if(CH.dummy){entry.a=dummyResponse(q);entry.state='done';return}
+    if(CH.dummy){entry.a=dummyResponse();entry.state='done';return}
     const ctx=apiMessages(null,true).filter(m=>m.role==='user'||(m.role==='assistant'&&!m.tool_calls?.length)).slice(-8);
     const out=await llmCall({messages:[{role:'system',content:sysText()+'\n\nThe user asks a quick side question. Answer briefly, using the conversation only as background. Do not call tools.'},...ctx,{role:'user',content:q}],route:CH.route,model:CH.model,signal:ctl.signal,think:false});
     entry.a=out.content||out.reasoning||'(no answer)';entry.state='done';
