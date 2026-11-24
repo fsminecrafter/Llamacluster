@@ -1,4 +1,4 @@
-import React,{useEffect,useRef,useState} from 'react';import {Link} from 'react-router-dom';
+import React,{useEffect,useRef,useState} from 'react';import TLink from '../components/TLink.jsx';import {Link} from 'react-router-dom';import BlurText from '../components/BlurText.jsx';
 import {useNodes} from '../useNodes.js';import {useTheme,THEMES} from '../theme.jsx';import ShinyText from '../components/ShinyText.jsx';
 import ToolChip from '../components/ToolChip.jsx';import ContextRing from '../components/ContextRing.jsx';import Workspace from '../components/Workspace.jsx';import Agents from '../components/Agents.jsx';import Markdown from '../components/Markdown.jsx';
 import {ThoughtLine,StatusMark,Pop,Icon,ICONS} from '../components/bits.jsx';
@@ -12,6 +12,7 @@ const PHASE={planning:'Planning…',running:'Working…',synthesizing:'Writing t
 const LABEL={queued:'Waiting…',running:'Working…',done:'Done',error:'Failed',skipped:'Skipped',stopped:'Stopped'};
 const PLACEHOLDER={dev:'Message Calcium…',ask:'Ask about the files in your workspace…',plan:'Describe what you want planned…',orchestra:'Describe a job to split across your nodes…',leader:'Describe a job for the leader to plan…',software:'Describe the software to build…'};
 const MODE_INFO={dev:['🛠','Dev','Chat with tools'],ask:['❓','Ask','Answer questions about your files, read-only'],plan:['🧭','Plan','Research and propose a plan first'],orchestra:['🎼','Orchestra','Split a job across nodes in parallel'],leader:['👑','Leader','Strongest model plans, others work by difficulty'],software:['💻','Software','Build alone on a time budget']};
+const SUGGEST=['Summarise the files in my workspace','Write a script that renames photos by date taken','Explain how this cluster shares a model across nodes','Plan a simple week of dinners'];
 const PERMS=[['manual','✋ Manual','Ask before every tool call'],['semi','🛡 Semi','Ask for writes and commands'],['uncontrolled','⚡ Uncontrolled','Never ask']];
 export default function Chat(){
   const {nodes}=useNodes(4000);const {ver}=useChat();const {theme,setTheme}=useTheme();
@@ -50,7 +51,7 @@ export default function Chat(){
   const toggle=k=>setDock(dock===k?'':k);
   return <div className={'chatpage'+(drop?' dropping':'')} onDragOver={e=>{if([...(e.dataTransfer?.types||[])].includes('Files')){e.preventDefault();setDrop(true)}}} onDragLeave={e=>{if(e.target===e.currentTarget)setDrop(false)}} onDrop={e=>{setDrop(false);if(e.dataTransfer?.files?.length){e.preventDefault();addFiles(e.dataTransfer.files)}}}>
     <header className="ctop">
-      <Link className="ib" to="/" aria-label="Back to cluster" title="Cluster"><Icon d={ICONS.back}/></Link>
+      <TLink className="ib" to="/" aria-label="Back to cluster" title="Cluster"><Icon d={ICONS.back}/></TLink>
       <span className="brand"><ShinyText on={busy}>Calcium</ShinyText></span><span className="grow"/>
       <Pop className="pill" label="Model" align="right" trigger={<><span className={'dot '+(ready.length?'ready':'')}/>{modelLabel}<Icon d={ICONS.chev} size={14}/></>}>{close=><div className="plist">
         <div className="plabel">Model</div>
@@ -73,7 +74,10 @@ export default function Chat(){
     </header>
     <Workspace open={ws} onClose={()=>setWs(false)}/>
     <div className="log" onScroll={onScroll}><div className="col">
-      {!CH.msgs.length&&<div className="empty"><h2><ShinyText>How can I help?</ShinyText></h2><p className="mut">{ready.length?`${ready.length} node${ready.length>1?'s':''} ready`:'No node is serving yet'}</p></div>}
+      {!CH.msgs.length&&<div className="empty"><h2><BlurText text="How can I help?"/></h2>
+        {ready.length?<><p className="mut">{`${ready.length} node${ready.length>1?'s':''} ready`}</p>
+          <div className="suggest">{SUGGEST.map((t,i)=><button key={t} style={{'--i':i}} onClick={()=>{setInput(t);ta.current?.focus()}}>{t}</button>)}</div></>
+          :<p className="mut">No node is serving yet. <Link to="/">Start a model on the cluster page</Link> to begin.</p>}</div>}
       {CH.msgs.map((m,i)=>{
         if(m.role==='tool')return null;
         if(m.role==='compact')return <details key={i} className="note"><summary>📦 Earlier messages summarised{m.auto?' (automatic)':''}</summary><pre className="tcb">{m.content}</pre></details>;
@@ -81,7 +85,7 @@ export default function Chat(){
         if(m.local)return <div key={i} className="note">{m.content}</div>;
         if(m.role==='user'&&m.auto)return <div key={i} className="note">↻ {m.label||short(m.content,80)}</div>;
         const last=i===lastIdx,live=!!m.streaming;
-        return <div key={i} className={'msg '+m.role+(m.agentName?' agentmsg agent-'+m.agentName.toLowerCase():'')}>
+        return <div key={i} className={'msg '+m.role+(m.agentName?' agentmsg agent-'+m.agentName.toLowerCase():'')+(last?' fresh':'')+(live&&m.content?' streaming':'')}>
           {m.agentName&&<div className="who"><b>{m.agentName}</b>{m.node?<span className="mut"> · {m.node}</span>:null}</div>}
           {m.images?.length>0&&<div className="imgs">{m.images.map(x=>IMGS[x.id]?<img key={x.id} src={IMGS[x.id]} alt={x.name}/>:<span key={x.id} className="mut small">🖼 {x.name} — image no longer stored</span>)}</div>}
           {m.reasoning&&<ThoughtLine text={m.reasoning} live={live&&!m.content&&!m.tool_calls}/>}
@@ -121,7 +125,7 @@ export default function Chat(){
           {CH.mode==='software'&&<label className="mini mut">⏱<input type="number" min="0.1" max="720" disabled={sw.running||sw.going} value={CH.swMin} onChange={e=>{CH.swMin=+e.target.value||30;saveChat();emit()}}/>min</label>}
           <span className="grow"/>{sw.label&&<span className="mut small swl">{sw.label}</span>}
           <ContextRing s={ctx}/>
-          {busy&&!input.trim()&&!imgs.length?<button className="sendbtn" onClick={stop} aria-label="Stop" title="Stop"><Icon d={ICONS.stop} size={16} fill/></button>:<button className="sendbtn" disabled={!input.trim()&&!imgs.length} onClick={()=>submit(false)} aria-label={busy?'Queue':'Send'} title={busy?'Queue message':'Send'}><Icon d={ICONS.send} size={18}/></button>}
+          {busy&&!input.trim()&&!imgs.length?<button key="stop" className="sendbtn" onClick={stop} aria-label="Stop" title="Stop"><Icon d={ICONS.stop} size={16} fill/></button>:<button key="send" className="sendbtn" disabled={!input.trim()&&!imgs.length} onClick={()=>submit(false)} aria-label={busy?'Queue':'Send'} title={busy?'Queue message':'Send'}><Icon d={ICONS.send} size={18}/></button>}
         </div></div>
     </div></footer>
   </div>;

@@ -12,6 +12,24 @@ with a single OpenAI-compatible endpoint in front of all of them.
 
 No dependencies beyond Python 3.8+ (standard library only).
 
+## Quick start: one command
+
+```bash
+./start.sh --worker          # Linux / macOS
+.\start.ps1 --worker         # Windows (PowerShell)
+```
+
+This starts the controller **and** a worker on this computer, registers the worker as a node and opens nothing else to your network (the worker listens on `127.0.0.1`). Then open <http://127.0.0.1:7870>.
+
+| Option | What it does |
+|---|---|
+| *(none)* | Controller only. Add workers from the UI, as in sections 1 and 2 below. |
+| `--worker` | Also run a worker on this computer and register it automatically. `--worker-port`, `--worker-name`, `--worker-host`, `--worker-token`, `--models-dir` and `--llama-server` tune it. |
+| `--classic` | Keep serving the old single-file UI (`ui.html`) at `/`. Without it, the old UI's address redirects to the new UI. |
+| `--rebuild` / `--no-build` | Force or skip the web UI build. By default it is built on first run and whenever `llamacluster-web/src` changed (needs Node.js 18+; without Node the old UI is served instead). |
+
+Every other option (`--port`, `--token`, `--local-only`, `--workspace`, `--no-exec`, ...) is passed to `controller.py`. Ctrl+C stops everything.
+
 ## 1. On every machine that will run models (the "worker")
 
 ```bash

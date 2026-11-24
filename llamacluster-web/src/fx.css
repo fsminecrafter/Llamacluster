@@ -1,0 +1,110 @@
+/* Motion and polish layer. Loaded last, so it refines styles.css / chat.css without editing them.
+   Everything that moves is switched off in the reduced-motion block at the bottom. */
+
+/* ---- press feedback on every button */
+button:not(:disabled):active,.btn:active{transform:scale(.97)}
+button,.btn{transition:border-color .15s,background .15s,color .15s,box-shadow .15s,transform .12s}
+.pri:not(:disabled):hover{box-shadow:0 0 0 4px var(--glow)}
+
+/* ---- shiny text: `currentColor` inside the gradient resolved to the transparent text colour, so only the moving band showed */
+.shiny.on{background-image:linear-gradient(110deg,var(--tx) 35%,var(--acc) 50%,var(--tx) 65%)}
+/* links styled as buttons get the same box as <button> */
+.btn{padding:6px 12px;border:1px solid var(--line);border-radius:calc(var(--r) - 4px);background:var(--panel2);color:var(--tx)}
+.btn.pri{background:var(--acc);color:var(--on-acc);border-color:var(--acc)}
+
+/* ---- top bar */
+.top{padding:10px max(20px,calc((100vw - 1140px)/2))}
+.top h1{font-size:18px;letter-spacing:-.01em}
+
+/* ---- dashboard hero: dot grid, status headline, numbers */
+.hero{position:relative;isolation:isolate;overflow:hidden;border-bottom:1px solid var(--line);padding:48px 20px 30px}
+.hero .dotgrid{position:absolute;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none;
+  -webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
+.hero-in{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+.hero-h{margin:0;font:600 clamp(28px,5vw,46px)/1.08 var(--read);letter-spacing:-.025em;max-width:18ch}
+.hero-p{margin:0;max-width:60ch}
+.gw{min-width:0;transition:background .2s,color .2s,border-color .2s}.gw.done{background:var(--acc);color:var(--on-acc);border-color:var(--acc)}
+.stats{display:flex;flex-wrap:wrap;row-gap:14px;margin-top:18px}
+.stat{padding-right:28px;margin-right:28px;border-right:1px solid var(--line)}.stat:last-child{border:none;margin:0;padding:0}
+.stat b{display:block;font:600 28px/1.1 var(--font);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.stat b small{font:500 14px var(--font);color:var(--mut);letter-spacing:0}.stat>span{font-size:12.5px;color:var(--mut)}
+.grid{max-width:1180px;margin:0 auto;padding:24px 20px 48px}
+
+/* ---- blur-in headline */
+.blurtext .bt{display:inline-block;animation:blurin .7s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(var(--i)*var(--d,70ms))}
+@keyframes blurin{0%{filter:blur(10px);opacity:0;transform:translateY(10px)}55%{filter:blur(3px);opacity:.7}100%{filter:blur(0);opacity:1;transform:none}}
+
+/* ---- node cards */
+.node.enter{animation:cardin .55s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0)*70ms)}
+@keyframes cardin{from{opacity:0;transform:translateY(14px) scale(.985)}}
+.node{display:flex;flex-direction:column;gap:10px;padding:16px}.node p{margin:0}.node h3{font-size:16px;letter-spacing:-.01em}
+.node.offline{opacity:.8}
+.spot::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;opacity:0;transition:opacity .25s;
+  background:radial-gradient(200px circle at var(--mx,50%) var(--my,50%),var(--acc),transparent 70%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
+.spot:hover::after{opacity:.9}
+.nstate{font-size:11.5px;padding:2px 9px;border-radius:99px;background:var(--panel2);color:var(--mut);transition:background .3s,color .3s}
+.nstate.ready{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.nstate.loading{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.nstate.offline{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
+/* a status dot that rings outward while the node serves or loads */
+.dot{position:relative;flex:none;transition:background .3s}
+.dot.ready::after,.dot.loading::after{content:"";position:absolute;inset:0;border-radius:50%;background:inherit;animation:ping 2s cubic-bezier(0,0,.2,1) infinite}
+.dot.loading::after{animation-duration:1.1s}
+@keyframes ping{75%,100%{transform:scale(2.6);opacity:0}}
+/* loading: a light slides along the top edge of the card */
+.loadbar{position:absolute;left:0;right:0;top:0;height:2px;overflow:hidden;pointer-events:none}
+.loadbar::before{content:"";position:absolute;inset:0;width:40%;background:linear-gradient(90deg,transparent,var(--acc),transparent);animation:slide 1.2s ease-in-out infinite}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
+/* meters */
+.meters{display:flex;flex-direction:column;gap:8px}.meter{font-size:12.5px}.mrow{display:flex;justify-content:space-between;gap:8px;margin-bottom:4px;font-variant-numeric:tabular-nums}
+.mbar{height:6px;border-radius:4px;background:var(--panel2);overflow:hidden}
+.mbar i{display:block;height:100%;border-radius:inherit;background:var(--acc);transition:width .8s cubic-bezier(.3,.9,.3,1),background .3s}
+.mbar.warn i{background:var(--warn)}.mbar.crit i{background:var(--bad)}
+/* downloads: the bar shimmers while bytes are moving */
+.bar>div{transition:width .6s ease}
+.bar.live>div{background:linear-gradient(110deg,var(--acc) 30%,color-mix(in srgb,var(--acc) 45%,#fff) 50%,var(--acc) 70%);background-size:220% 100%;animation:shine 1.6s linear infinite}
+.emptycard{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;gap:10px;padding:48px 16px;border:1px dashed var(--line);border-radius:var(--r)}.emptycard p{margin:0}
+
+/* ---- click sparks */
+.sparklayer{position:fixed;inset:0;pointer-events:none;z-index:9999}
+.sparklayer i{position:absolute;width:2px;height:9px;margin:-4px 0 0 -1px;border-radius:2px;background:var(--acc);transform:rotate(var(--a)) translateY(-6px);animation:spark .5s ease-out forwards}
+@keyframes spark{to{transform:rotate(var(--a)) translateY(-28px) scaleY(.2);opacity:0}}
+
+/* ---- dialogs ease in and out (the backdrop fades and blurs) */
+.dlg{opacity:0;transform:translateY(10px) scale(.98);transition:opacity .22s,transform .22s cubic-bezier(.2,.8,.2,1),overlay .22s allow-discrete,display .22s allow-discrete}
+.dlg[open]{opacity:1;transform:none}
+.dlg::backdrop{background:#0000;backdrop-filter:blur(0);transition:background .22s,backdrop-filter .22s,overlay .22s allow-discrete,display .22s allow-discrete}
+.dlg[open]::backdrop{background:#0009;backdrop-filter:blur(5px)}
+@starting-style{.dlg[open]{opacity:0;transform:translateY(10px) scale(.98)}.dlg[open]::backdrop{background:#0000;backdrop-filter:blur(0)}}
+
+/* ---- page change: a short cross-fade (TLink starts the transition) */
+::view-transition-old(root){animation:vt-out .16s ease both}
+::view-transition-new(root){animation:vt-in .28s cubic-bezier(.2,.8,.2,1) both}
+@keyframes vt-out{to{opacity:0;transform:scale(.99)}}@keyframes vt-in{from{opacity:0;transform:translateY(8px)}}
+
+/* ---- chat */
+.chatpage .empty h2{font-size:clamp(26px,4vw,34px);letter-spacing:-.02em}
+.suggest{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:22px auto 0;max-width:600px}
+.suggest button{border-radius:99px;padding:7px 14px;background:var(--panel);font-size:13px;animation:chipin .5s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(.45s + var(--i)*80ms)}
+.suggest button:hover{background:var(--panel2);transform:translateY(-1px)}
+@keyframes chipin{from{opacity:0;transform:translateY(8px)}}
+/* only the newest message animates in (older ones are already there) */
+.chatpage .msg.fresh{animation:msgin .32s cubic-bezier(.2,.8,.2,1) both}
+@keyframes msgin{from{opacity:0;transform:translateY(8px)}}
+.chatpage .msg.user.fresh{transform-origin:100% 100%;animation-name:usrin}@keyframes usrin{from{opacity:0;transform:translateY(8px) scale(.96)}}
+/* blinking caret on the last line while the answer streams */
+.streaming .md>:last-child::after{content:"";display:inline-block;width:.5em;height:1.05em;margin-left:3px;border-radius:2px;background:var(--acc);vertical-align:-.18em;animation:caret 1s steps(2,start) infinite}
+@keyframes caret{50%{opacity:0}}
+/* send <-> stop swap */
+.sendbtn{animation:btnpop .22s cubic-bezier(.3,1.6,.5,1)}@keyframes btnpop{from{transform:scale(.6);opacity:.4}}
+.sendbtn:not(:disabled):hover{transform:translateY(-1px)}.sendbtn:not(:disabled):active{transform:scale(.93)}
+.cbox{transition:border-color .2s,box-shadow .25s,transform .25s}.cbox:focus-within{transform:translateY(-1px)}
+.popmenu{transform-origin:top right}.popmenu.up{transform-origin:bottom left}
+.dockpanel,.askbox{animation:msgin .25s cubic-bezier(.2,.8,.2,1) both}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+  .loadbar::before,.dot::after{display:none}
+}
+@media(max-width:640px){.hero{padding:32px 14px 22px}.stat{padding-right:18px;margin-right:18px}.grid{padding:16px 12px 32px}.top{padding:8px 12px}}

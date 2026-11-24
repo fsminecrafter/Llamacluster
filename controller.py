@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """LlamaCluster controller.
 
-* Serves the web UI (ui.html)
+* Serves the web UI (new React build in llamacluster-web/dist; old ui.html with --classic)
 * Keeps a list of worker nodes (LAN, Modal, Colab, anything reachable by URL)
 * Polls them, forwards management actions (start/stop/settings/install models)
 * Exposes ONE OpenAI-compatible endpoint (/v1/*) that load-balances across all
@@ -38,6 +38,16 @@ import tools
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.expanduser("~/.config/llamacluster/nodes.json")
+WEB_DIST = os.path.join(HERE, "llamacluster-web", "dist")   # built React UI (npm run build); served at / unless --classic
+CLASSIC = False                                              # --classic: keep serving the old single-file ui.html at /
+_WEB_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8",
+              ".css": "text/css; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml", ".map": "application/json",
+              ".woff2": "font/woff2", ".woff": "font/woff", ".png": "image/png", ".jpg": "image/jpeg", ".ico": "image/x-icon",
+              ".webp": "image/webp", ".txt": "text/plain; charset=utf-8"}
+
+
+def new_ui_available():
+    return not CLASSIC and os.path.isfile(os.path.join(WEB_DIST, "index.html"))
 POLL_S = 3.0
 
 lock = threading.Lock()
@@ -713,6 +723,49 @@ class H(BaseHTTPRequestHandler):
             f.seek(0)
             self._attachment("llamacluster-workspace.zip", "application/zip", f, size)
 
+    def _static(self, fp, ctype, cache):
+        with open(fp, "rb") as f:
+            data = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Cache-Control", cache)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _serve_ui(self, path):
+        """The page itself and its files are public (the API behind them still needs the token). Returns True if handled.
+        New UI (llamacluster-web/dist) answers at / and on its own routes (/chat); the old ui.html redirects there
+        unless the controller was started with --classic (or the new UI hasn't been built)."""
+        old_ui = os.path.join(HERE, "ui.html")
+        if path in ("/ui.html", "/classic"):
+            if new_ui_available():
+                self.send_response(302)
+                self.send_header("Location", "/")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return True
+            self._static(old_ui, "text/html; charset=utf-8", "no-cache")
+            return True
+        if not new_ui_available():
+            if path in ("/", "/index.html"):
+                self._static(old_ui, "text/html; charset=utf-8", "no-cache")
+                return True
+            return False
+        if path.startswith(("/api/", "/v1/", "/vendor/")):
+            return False
+        dist = os.path.realpath(WEB_DIST)
+        fp = os.path.realpath(os.path.join(dist, urllib.parse.unquote(path).lstrip("/")))
+        if path not in ("/", "/index.html") and fp.startswith(dist + os.sep) and os.path.isfile(fp):
+            ext = os.path.splitext(fp)[1].lower()
+            cache = "public, max-age=31536000, immutable" if path.startswith("/assets/") else "no-cache"
+            self._static(fp, _WEB_TYPES.get(ext) or mimetypes.guess_type(fp)[0] or "application/octet-stream", cache)
+            return True
+        if os.path.splitext(path)[1]:      # a missing file (e.g. /assets/old.js): a real 404, not the app shell
+            return False
+        self._static(os.path.join(dist, "index.html"), _WEB_TYPES[".html"], "no-cache")   # client-side routes: /chat, ...
+        return True
+
     def _authed(self):
         if not CTRL_TOKEN:
             return True
@@ -756,14 +809,7 @@ class H(BaseHTTPRequestHandler):
     def _route(self, method):
         path = urllib.parse.urlparse(self.path).path
         try:
-            if path in ("/", "/index.html") and method == "GET":
-                with open(os.path.join(HERE, "ui.html"), "rb") as f:
-                    data = f.read()
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(data)))
-                self.end_headers()
-                self.wfile.write(data)
+            if method == "GET" and self._serve_ui(path):
                 return
             if path.startswith("/vendor/") and method == "GET":      # bundled xterm.js (public library files)
                 name = path[len("/vendor/"):]
@@ -1139,7 +1185,7 @@ class H(BaseHTTPRequestHandler):
 
 
 def main():
-    global CTRL_TOKEN, STATE_FILE, TOKEN_AUTO, PORT
+    global CTRL_TOKEN, STATE_FILE, TOKEN_AUTO, PORT, CLASSIC
     ap = argparse.ArgumentParser(description="LlamaCluster controller + gateway")
     ap.add_argument("--host", default="0.0.0.0",
                     help="address to listen on. Default 0.0.0.0 = reachable from other devices on your network; "
@@ -1162,6 +1208,9 @@ def main():
                     help="URL of a SearXNG instance for web_search (recommended; else DuckDuckGo/Bing scraping)")
     ap.add_argument("--allow-private-fetch", action="store_true",
                     help="let the chat's fetch_url reach LAN/localhost addresses (off by default)")
+    ap.add_argument("--classic", action="store_true",
+                    help="serve the old single-file UI (ui.html) at / instead of the new React UI "
+                         "(without it the old UI URL redirects to the new one)")
     ap.add_argument("--no-exec", action="store_true",
                     help="disable the chat's exec_command tool entirely (the model can't run shell commands at all)")
     ap.add_argument("--safe-commands", default=os.environ.get("LLAMACLUSTER_SAFE_COMMANDS", ""),
@@ -1172,6 +1221,7 @@ def main():
         a.host = "127.0.0.1"
     STATE_FILE = a.state
     PORT = a.port
+    CLASSIC = a.classic
     CTRL_TOKEN = a.token
     exposed = not is_loopback(a.host)
     if exposed and not CTRL_TOKEN and not a.no_token:
@@ -1180,6 +1230,12 @@ def main():
     term.configure(allow_net=a.term_net)
     tools.configure(a.workspace, a.searxng, a.allow_private_fetch, exec_enabled=not a.no_exec,
                     safe_commands=a.safe_commands.split(","))
+    if CLASSIC:
+        print("[controller] UI: classic (ui.html)")
+    elif new_ui_available():
+        print("[controller] UI: new (llamacluster-web/dist); the old UI redirects to it. Use --classic to keep the old one.")
+    else:
+        print("[controller] UI: new UI not built yet (cd llamacluster-web && npm install && npm run build) - serving classic ui.html")
     print(f"[controller] chat workspace: {tools.WORKSPACE}  (shell commands {'OFF' if a.no_exec else 'on'})")
     load()
     load_scheduled_tasks()
