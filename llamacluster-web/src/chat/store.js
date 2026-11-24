@@ -30,13 +30,14 @@ export const TOOL_DEFAULTS={search:true,fetch:true,read:true,write:true,exec:tru
 
 const load=()=>{try{return JSON.parse(localStorage.getItem('lc_chat')||'null')}catch{return null}};
 export const CH=(()=>{
-  const c={msgs:[],btw:[],temp:0.7,max:2048,effort:'',model:'',route:'',steps:10,toolTok:3000,mode:'dev',leader:'',tasks:[],taskSeq:0,maxSub:4,perm:'semi',compactMode:'ai',swMin:30,summary:'',sw:null,...(load()||{})};
+  const c={msgs:[],btw:[],temp:0.7,max:2048,effort:'',model:'',route:'',steps:10,toolTok:3000,mode:'dev',leader:'',tasks:[],taskSeq:0,maxSub:4,perm:'semi',compactMode:'ai',swMin:30,summary:'',sw:null,dummy:false,...(load()||{})};
   if(!Array.isArray(c.msgs))c.msgs=[];
   if(!Array.isArray(c.btw))c.btw=[];
   if(!Array.isArray(c.queue))c.queue=[];
   if(!Array.isArray(c.tasks))c.tasks=[];
   if(!Array.isArray(c.agents))c.agents=[];
   if(!Array.isArray(c.agentNotes))c.agentNotes=[];
+  c.dummy=!!c.dummy;
   if(typeof c.agentInterrupt!=='boolean')c.agentInterrupt=false;
   c.agents=c.agents.filter(a=>a&&typeof a.id==='string'&&typeof a.name==='string'&&typeof a.model==='string'&&Array.isArray(a.messages));
   c.agents.forEach(a=>{   // a page reload killed their request: they wait for the next message

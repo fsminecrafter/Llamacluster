@@ -15,10 +15,18 @@
 .popmenu.right{right:0}.popmenu.left{left:0}.popmenu.up{top:auto;bottom:calc(100% + 8px)}@keyframes popin{from{opacity:0;transform:translateY(-4px) scale(.98)}}
 .plist{display:flex;flex-direction:column;gap:1px}.plabel{font:600 11px var(--font);letter-spacing:.6px;text-transform:uppercase;color:var(--mut);padding:8px 10px 4px}
 .pnote{padding:4px 10px 8px}.plist select{margin:2px 6px 6px;width:calc(100% - 12px)}
+.glide-select{position:relative;display:flex;flex-direction:column;gap:2px;padding:2px 4px}
+.glide-select-highlight{position:absolute;left:4px;right:4px;top:2px;border-radius:10px;background:var(--panel2);pointer-events:none;transition:transform .28s cubic-bezier(.22,1,.36,1),height .2s}
+.glide-select-option{position:relative;z-index:1;display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:none;background:transparent;border-radius:10px;padding:7px 10px;font-size:13px}
+.glide-select-option:focus-visible{outline:2px solid var(--acc);outline-offset:-2px}
+.glide-select-check{color:var(--acc);font-weight:700}
 .pitem{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:none;background:transparent;border-radius:10px;padding:7px 10px;font-size:13px}
 .pitem:hover{background:var(--panel2)}.pitem.sel{background:var(--panel2)}.pitem.tall{padding:8px 10px;align-items:flex-start}.pitem .mic{font-size:16px;line-height:1.3}.pitem b{display:block;font-weight:600}
 .pset{padding:2px 6px 8px;display:flex;flex-direction:column;gap:6px}.pset label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mut)}.pset input,.pset select{width:100%}
 .seg2{display:flex;gap:4px;flex-wrap:wrap}.seg2 button{flex:1;padding:5px 8px;font-size:12px;border-radius:99px;background:transparent}.seg2 button.on{background:var(--acc);border-color:var(--acc);color:var(--on-acc);font-weight:600}
+.pset .dummy-option{flex-direction:row;align-items:flex-start;gap:8px;padding:4px 8px;color:var(--tx);font-size:13px}
+.pset .dummy-option input{width:auto;margin:3px 0 0;accent-color:var(--acc)}
+.dummy-option>span{display:flex;flex-direction:column;gap:2px}
 .prow{display:flex;gap:6px;margin-top:6px}.prow button{flex:1;justify-content:center;gap:6px}
 /* conversation */
 .chatpage .log{flex:1;overflow:auto;scroll-behavior:smooth}
@@ -29,6 +37,7 @@
 .chatpage .msg.assistant{font:15.5px/1.7 var(--read);white-space:normal;overflow-wrap:anywhere}
 .chatpage .msg.agentmsg{border-left:2px solid var(--line);padding-left:12px}.who{font-size:12px;margin-bottom:2px}
 .chatpage .think,.chatpage .thoughtline{margin-bottom:6px}.chatpage .thoughtline>summary{color:var(--mut);font-size:12.5px;list-style:none}.chatpage .thoughtline>summary::-webkit-details-marker{display:none}
+.think-wait{display:flex;align-items:center;gap:8px}.think-wait .lattice{flex:none}
 .chatpage .thoughtbody{border-left:2px solid var(--line);padding-left:10px;margin:6px 0 0 4px;color:var(--mut);font-size:12.5px}
 .acts{display:flex;align-items:center;gap:2px;margin-top:4px;opacity:0}.msg:hover .acts,.msg:focus-within .acts{opacity:1}@media(hover:none){.acts{opacity:1}}
 /* tool chips: light single lines */
@@ -70,4 +79,4 @@
 .chatpage .agent-card{border-radius:12px}
 .dlg.wide{width:min(880px,94vw)}
 @media(max-width:640px){.chatpage .col{padding:4px 14px 40px}.ctop{padding:8px 8px}.pop.pill .popbtn{max-width:52vw}.cfoot{padding:0 8px calc(8px + env(safe-area-inset-bottom))}}
-@media(prefers-reduced-motion:reduce){.chatpage .log{scroll-behavior:auto}.popmenu{animation:none}}
+@media(prefers-reduced-motion:reduce){.chatpage .log{scroll-behavior:auto}.popmenu{animation:none}.glide-select-highlight{transition:none}}

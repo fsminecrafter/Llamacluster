@@ -16,6 +16,23 @@ export const AUTO_COMPACT_PCT=97;
 const btwControllers=new Map();let btwSeq=0;
 export const lastUserText=()=>{for(let i=CH.msgs.length-1;i>=0;i--)if(CH.msgs[i].role==='user'&&!CH.msgs[i].auto&&!CH.msgs[i].agentName)return CH.msgs[i].content;return ''};
 export const notice=text=>{CH.msgs.push({role:'assistant',local:true,content:text});saveChat();emit()};
+function dummyResponse(text,images=[]){
+  const received=text?(text.length>500?text.slice(0,500)+'… [truncated]':text):'an image attachment';
+  const attachments=images.length?` (${images.length} image${images.length===1?'':'s'} received; not analyzed in dummy mode)`: '';
+  return `Dummy AI response — generated locally without a model request.\n\nI received: ${received}${attachments}`;
+}
+async function dummyReply(signal){
+  const user=[...CH.msgs].reverse().find(m=>m.role==='user'&&!m.auto&&!m.agentName);
+  const a={role:'assistant',content:'',node:'Dummy AI',streaming:true};CH.msgs.push(a);emit();
+  const response=dummyResponse(user?.content||'',user?.images||[]);
+  for(let i=0;i<response.length;i+=48){
+    if(signal.aborted){if(!signal.cleared)a.stopped=true;break}
+    a.content+=response.slice(i,i+48);emit();await sleep(16);
+  }
+  delete a.streaming;
+  if(CH.mode==='plan'&&!a.stopped&&!signal.aborted)a.plan='pending';
+  emit();return a;
+}
 
 // ======================================================================= tools
 export async function loadTools(){
@@ -304,7 +321,7 @@ export async function compactChat(focus,{auto=false,signal}={}){
   const cap=ctxCapacity()?.tokens||8192,budget=Math.max(3000,Math.floor((cap*0.6-1500)*3.2));
   const ask=(CH.summary?`EARLIER SUMMARY (from a previous compaction):\n${CH.summary}\n\n`:'')+`CONVERSATION TO SUMMARISE:\n${compactTranscript(old,budget)}\n\n`+(focus?`Pay special attention to: ${focus}\n\n`:'')+'Write the summary now.';
   const tmp={role:'assistant',local:true,streaming:true,content:'📦 Compacting the conversation…'};CH.msgs.push(tmp);emit();
-  let text='',mode=CH.compactMode==='script'?'script':'ai';
+  let text='',mode=CH.dummy||CH.compactMode==='script'?'script':'ai';
   if(mode==='script')text=scriptCompactSummary(msgs);
   else try{
     const out=await llmCall({messages:[{role:'system',content:COMPACT_SYS},{role:'user',content:ask}],route:CH.route,model:CH.model,signal,max:Math.min(1800,Math.max(300,Math.floor(cap*0.25))),think:false});
@@ -478,12 +495,15 @@ export function regen(){if(rt.chatAbort)return;while(CH.msgs.length&&CH.msgs[CH.
 // Runs one turn: the model loop of the selected mode. regen=true means the last message is already in CH.msgs.
 export async function chatSend(){
   const turnStart=CH.msgs.length-1;
-  if(!rt.toolinfo)await loadTools();
-  if(CH.mode==='ask')await loadAskTree();
+  if(!CH.dummy){
+    if(!rt.toolinfo)await loadTools();
+    if(CH.mode==='ask')await loadAskTree();
+  }
   repairHistory();
   const ctl=rt.chatAbort=new AbortController();emit();
   try{
-    if(CH.mode==='orchestra')await runOrchestra(ctl.signal);
+    if(CH.dummy)await dummyReply(ctl.signal);
+    else if(CH.mode==='orchestra')await runOrchestra(ctl.signal);
     else if(CH.mode==='leader')await runLeader(ctl.signal);
     else if(CH.mode==='software')await runSoftware(ctl.signal);
     else await agentLoop(ctl.signal);
@@ -491,7 +511,7 @@ export async function chatSend(){
   finally{
     if(ctl.cleared)wipeChat();else repairHistory();
     rt.chatAbort=null;flushAgentMessages();const resume=CH.agentInterrupt;CH.agentInterrupt=false;
-    CH.msgs.slice(Math.max(0,turnStart)).filter(m=>m.role==='assistant'&&!m.agentName&&!m.streaming&&!m.tool_calls?.length&&m.content?.trim()).forEach(m=>queueSharedChatMessage(m));
+    if(!CH.dummy)CH.msgs.slice(Math.max(0,turnStart)).filter(m=>m.role==='assistant'&&!m.agentName&&!m.streaming&&!m.tool_calls?.length&&m.content?.trim()).forEach(m=>queueSharedChatMessage(m));
     saveChat();emit();
     if(resume)setTimeout(()=>{if(!rt.chatAbort)chatSend()},0);else if(CH.queue.length)setTimeout(dispatchQueuedMessage,0);
   }
@@ -504,10 +524,10 @@ export async function sendMessage(text,images=[]){
   if(dispatchBtw(text))return true;
   if(rt.chatAbort){rt.chatAbort.abort();return false}   // Send doubles as Stop while a reply is running
   if(!text&&!images.length)return false;
-  if(images.length&&!capsNow().vision){rt.err='The selected model can’t read images — remove the picture(s) or pick a vision model.';emit();return false}
+  if(images.length&&!CH.dummy&&!capsNow().vision){rt.err='The selected model can’t read images — remove the picture(s) or pick a vision model.';emit();return false}
   const pm=planMsg();if(pm)pm.plan='revised';   // typing instead of clicking = feedback on the pending plan
   const message={role:'user',content:text,...(images.length?{images}:{})};
-  CH.msgs.push(message);queueSharedChatMessage(message);rt.err='';saveChat();emit();
+  CH.msgs.push(message);if(!CH.dummy)queueSharedChatMessage(message);rt.err='';saveChat();emit();
   chatSend();return true;
 }
 // ---- message queue (Ctrl+Enter): messages wait and are sent one after another
@@ -520,9 +540,9 @@ export function unqueue(i){CH.queue.splice(i,1);saveChat();emit()}
 function dispatchQueuedMessage(){
   if(rt.chatAbort||!CH.queue.length)return;
   const next=CH.queue[0];
-  if(next.images?.length&&!capsNow().vision){alert('A queued message contains images, but the selected model cannot read images. Select a multimodal model before sending the queue.');return}
+  if(next.images?.length&&!CH.dummy&&!capsNow().vision){alert('A queued message contains images, but the selected model cannot read images. Select a multimodal model before sending the queue.');return}
   CH.queue.shift();const message={role:'user',content:next.text||'',...(next.images?.length?{images:next.images}:{})};
-  CH.msgs.push(message);queueSharedChatMessage(message);saveChat();emit();chatSend();
+  CH.msgs.push(message);if(!CH.dummy)queueSharedChatMessage(message);saveChat();emit();chatSend();
 }
 
 // ======================================================================= /btw: a side question answered in parallel, kept out of the chat
@@ -530,6 +550,7 @@ function dispatchBtw(text){const m=/^\/btw(?:\s+([\s\S]+))?$/i.exec(text);if(!m)
 async function runBtw(q){
   const id=++btwSeq,ctl=new AbortController(),entry={id:'btw'+id,q,a:'',state:'run'};btwControllers.set(id,ctl);CH.btw.push(entry);emit();
   try{
+    if(CH.dummy){entry.a=dummyResponse(q);entry.state='done';return}
     const ctx=apiMessages(null,true).filter(m=>m.role==='user'||(m.role==='assistant'&&!m.tool_calls?.length)).slice(-8);
     const out=await llmCall({messages:[{role:'system',content:sysText()+'\n\nThe user asks a quick side question. Answer briefly, using the conversation only as background. Do not call tools.'},...ctx,{role:'user',content:q}],route:CH.route,model:CH.model,signal:ctl.signal,think:false});
     entry.a=out.content||out.reasoning||'(no answer)';entry.state='done';
