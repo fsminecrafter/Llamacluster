@@ -26,14 +26,14 @@ export function ThoughtLine({text,live,style='classic'}){
     <summary>
       {style==='lattice'?<LatticeLoader on={live}/>:<StatusMark state={live?'run':'ok'} size={14}/>}
       {live?(style==='lattice'?'Thinking':<ShinyText>Thinking…</ShinyText>):'Thought'}
-      {(live?ms:final)>=1000&&<span className="mut small"> · {fmtDur(live?ms:final)}</span>}
+      {(live?ms:final)>=1000&&<span className="mut small">{style==='lattice'?' ':' · '}{fmtDur(live?ms:final)}</span>}
       {!live&&steps.length>1&&<span className="mut small"> · {steps.length} steps</span>}
     </summary>
     <div className="thoughtbody">{text||'No reasoning text has arrived yet.'}</div>
   </details>;
 }
 // A lattice of cells that brightens in a wave while an agent works.
-export function LatticeLoader({on,cells=8}){return <span className={'lattice'+(on?' on':'')} aria-hidden>{Array.from({length:cells},(_,i)=><i key={i} style={{animationDelay:i*90+'ms'}}/>)}</span>}
+export function LatticeLoader({on,cells=9}){return <span className={'lattice'+(on?' on':'')} aria-hidden>{Array.from({length:cells},(_,i)=><i key={i} style={{animationDelay:(Math.floor(i/3)+i%3)*75+'ms'}}/>)}</span>}
 // Segmented control whose thumb glides to the chosen option.
 export function Segment({value,options,onChange,label}){
   const ref=useRef(),[box,setBox]=useState({x:0,w:0});

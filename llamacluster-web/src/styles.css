@@ -62,7 +62,7 @@ pre.log{background:var(--bg);border:1px solid var(--line);border-radius:8px;padd
 @keyframes ccwipe{from{background-position:120% 0}to{background-position:-120% 0}}.cc.err{animation:shake .35s 1}@keyframes shake{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
 .cctime{margin-left:auto;font-variant-numeric:tabular-nums}
 .thoughtline>summary{display:flex;gap:6px;align-items:center;cursor:pointer}.thoughtbody{white-space:pre-wrap;margin-top:6px}
-.lattice{display:inline-flex;gap:2px}.lattice i{width:5px;height:12px;border-radius:2px;background:var(--line)}.lattice.on i{background:var(--tint,var(--acc));animation:lat 1s ease-in-out infinite}@keyframes lat{0%,100%{opacity:.25}50%{opacity:1}}
+.lattice{display:inline-grid;grid-template-columns:repeat(3,6px);grid-template-rows:repeat(3,6px);gap:2px;flex:none;vertical-align:middle}.lattice i{width:6px;height:6px;border-radius:50%;background:var(--line)}.lattice.on i{background:var(--tint,var(--acc));animation:lat 1s ease-in-out infinite}@keyframes lat{0%,100%{opacity:.25}50%{opacity:1}}
 .segc{position:relative;display:inline-flex;border:1px solid var(--line);border-radius:99px;background:var(--panel2);padding:2px;flex-wrap:wrap}
 .segc .thumb{position:absolute;top:2px;bottom:2px;left:0;border-radius:99px;background:var(--acc);transition:transform .28s cubic-bezier(.3,1.5,.5,1),width .28s}
 .segc button{position:relative;background:transparent;border:0;border-radius:99px;padding:3px 10px;font-size:12px}.segc button.on{color:var(--on-acc);font-weight:600}
