@@ -33,7 +33,10 @@ export function ThoughtLine({text,live,style='classic'}){
   </details>;
 }
 // A 3x3 lattice that rotates while an agent works.
-export function LatticeLoader({on,cells=9}){return <span className={'lattice'+(on?' on':'')} aria-hidden>{Array.from({length:cells},(_,i)=><i key={i}/>)}</span>}
+export function LatticeLoader({on,cells=9}){
+  const orbit=[7,0,1,6,-1,2,5,4,3];
+  return <span className={'lattice'+(on?' on':'')} aria-hidden>{Array.from({length:cells},(_,i)=><i key={i} style={orbit[i]>=0?{animationDelay:orbit[i]*112.5+'ms'}:undefined}/>)}</span>;
+}
 export function WaveLoader({on,cells=8}){return <span className={'wave-loader'+(on?' on':'')} aria-hidden>{Array.from({length:cells},(_,i)=><i key={i} style={{animationDelay:i*90+'ms'}}/>)}</span>}
 // Segmented control whose thumb glides to the chosen option.
 export function Segment({value,options,onChange,label}){
